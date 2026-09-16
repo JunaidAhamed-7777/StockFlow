@@ -967,3 +967,169 @@ http://localhost:3001/api
 ```
 
 The backend is the source of truth for authentication, authorization, data validation, inventory, orders, stock, and user data.
+
+---
+
+# 25. Verified local run (Windows)
+
+This section is the working procedure used to start the full stack on this machine. Use it instead of the older `55432` example in section 3.
+
+The app does **not** use the Windows PostgreSQL services on ports `5432` / `5433` / `5434`. Those are separate installs. StockFlow uses a dedicated PostgreSQL 18 data directory at:
+
+```text
+server/.pgdata
+```
+
+That directory is gitignored. The cluster listens on **port `5435`**, which matches `server/.env.example`.
+
+Verified URLs:
+
+| Service | URL |
+| ------- | --- |
+| Frontend (Vite) | `http://localhost:5173` |
+| Backend API | `http://localhost:3001` |
+| Health check | `http://localhost:3001/api/health` |
+
+Logins are in section 22.
+
+---
+
+## 25.1 One-time setup
+
+From the repository root, install workspace dependencies if `node_modules` is missing:
+
+```powershell
+npm install
+```
+
+Create environment files if they do not exist:
+
+```powershell
+Copy-Item server\.env.example server\.env
+Copy-Item client\.env.example client\.env
+```
+
+`server/.env` must contain:
+
+```env
+DATABASE_URL="postgresql://stockflow:StockFlow_Dev2026@localhost:5435/stock_management?schema=public"
+JWT_SECRET="stockflow-local-jwt-secret-change-in-production"
+BCRYPT_SALT_ROUNDS="10"
+PORT="3001"
+CLIENT_URL="http://localhost:5173"
+```
+
+`client/.env` must contain:
+
+```env
+VITE_API_BASE_URL=http://localhost:3001/api
+```
+
+### Create the dedicated PostgreSQL cluster (first time only)
+
+Requires PostgreSQL 18 binaries at `C:\Program Files\PostgreSQL\18\bin` (the `postgresql-x64-18` Windows service can stay running; this cluster is separate).
+
+Run the following from the **repository root**.
+
+```powershell
+$pgBin = "C:\Program Files\PostgreSQL\18\bin"
+$dataDir = Join-Path (Get-Location) "server\.pgdata"
+$pwFile = Join-Path (Get-Location) "server\.pgpw.txt"
+
+if (-not (Test-Path (Join-Path $dataDir "PG_VERSION"))) {
+    Set-Content -Path $pwFile -Value "StockFlow_Dev2026" -NoNewline -Encoding ascii
+    & "$pgBin\initdb.exe" `
+        --pgdata $dataDir `
+        --username stockflow `
+        --pwfile $pwFile `
+        --auth scram-sha-256 `
+        --encoding UTF8 `
+        --locale "English_United States.1252"
+}
+```
+
+Start the cluster on port `5435`:
+
+```powershell
+$pgBin = "C:\Program Files\PostgreSQL\18\bin"
+$dataDir = Join-Path (Get-Location) "server\.pgdata"
+& "$pgBin\pg_ctl.exe" -D $dataDir -l "$dataDir\server.log" -o "-p 5435" start
+```
+
+The first start after a crash can take 30–60 seconds. Wait until `pg_ctl` prints `server started`.
+
+Create the application database if needed (skip if `psql` reports that `stock_management` already exists):
+
+```powershell
+$pgBin = "C:\Program Files\PostgreSQL\18\bin"
+$env:PGPASSWORD = "StockFlow_Dev2026"
+& "$pgBin\psql.exe" -w -U stockflow -h 127.0.0.1 -p 5435 -d postgres -c "CREATE DATABASE stock_management;"
+```
+
+Push the schema and seed test users:
+
+```powershell
+cd server
+npx prisma generate
+npx prisma db push
+npm run seed
+cd ..
+```
+
+---
+
+## 25.2 Everyday start
+
+Run the PostgreSQL commands from the **repository root**. Use two additional terminals for the API and Vite servers.
+
+**1. PostgreSQL cluster** (skip if `pg_ctl status` already shows it running):
+
+```powershell
+$pgBin = "C:\Program Files\PostgreSQL\18\bin"
+$dataDir = Join-Path (Get-Location) "server\.pgdata"
+& "$pgBin\pg_ctl.exe" -D $dataDir status
+# If "no server running":
+& "$pgBin\pg_ctl.exe" -D $dataDir -l "$dataDir\server.log" -o "-p 5435" start
+```
+
+**2. Backend** (leave this terminal open):
+
+```powershell
+cd server
+npm run dev
+```
+
+Expected: `Server listening on port 3001`
+
+**3. Frontend** (leave this terminal open):
+
+```powershell
+cd client
+npm run dev
+```
+
+Expected: `Local: http://localhost:5173/`
+
+Open `http://localhost:5173/login` and sign in with a section 22 account.
+
+Quick API check:
+
+```powershell
+Invoke-RestMethod http://localhost:3001/api/health
+```
+
+---
+
+## 25.3 Stop
+
+Stop the Node processes with `Ctrl+C` in the server and client terminals.
+
+Stop the dedicated cluster (does not stop the Windows PostgreSQL 13/16/18 services):
+
+```powershell
+$pgBin = "C:\Program Files\PostgreSQL\18\bin"
+$dataDir = Join-Path (Get-Location) "server\.pgdata"
+& "$pgBin\pg_ctl.exe" -D $dataDir stop
+```
+
+Do not commit `server/.env`, `client/.env`, `server/.pgdata/`, or `server/.pgpw.txt`.
