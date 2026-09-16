@@ -11,7 +11,7 @@ import { Button } from "../../components/ui/Button";
 const ROLES = [
   { id: "ADMIN", label: "Admin Console" },
   { id: "SUPPLIER", label: "Supplier Portal" },
-  { id: "CUSTOMER", label: "Procurement Tier-1" },
+  { id: "CUSTOMER", label: "Customer Portal" },
 ];
 
 export function LoginPage() {
