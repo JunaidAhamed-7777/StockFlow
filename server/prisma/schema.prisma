@@ -1,0 +1,91 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("CUSTOMER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Order     Order[]
+  Supplier  Supplier?
+}
+
+model Supplier {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  companyName   String
+  contactNumber String
+  address       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id])
+  Product       Product[]
+}
+
+model Category {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
+
+  products Product[]
+}
+
+model Product {
+  id                Int     @id @default(autoincrement())
+  name              String
+  description       String?
+  sku               String  @unique
+  price             Float
+  quantity          Int     @default(0)
+  lowStockThreshold Int     @default(10)
+  categoryId        Int
+  supplierId        Int
+
+  category          Category?          @relation(fields: [categoryId], references: [id])
+  supplier          Supplier?          @relation(fields: [supplierId], references: [id])
+  orderItems        OrderItem[]
+  stockTransactions StockTransaction[]
+}
+
+model Order {
+  id          Int      @id @default(autoincrement())
+  customerId  Int
+  status      String
+  totalAmount Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer   User        @relation(fields: [customerId], references: [id])
+  orderItems OrderItem[]
+}
+
+model OrderItem {
+  id        Int   @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Float
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model StockTransaction {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  type      String
+  quantity  Int
+  reason    String?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+}

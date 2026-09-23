@@ -26,9 +26,9 @@ node_modules/
 client/node_modules
 client/node_modules/bin
 
-# prisma
-prisma/
+# prisma (keep schema.prisma and seed.js tracked; ignore generated client output)
 .prismaClient/
+**/generated/prisma/
 
 # Editor directories and files
 .vscode/
