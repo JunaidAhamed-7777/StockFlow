@@ -49,7 +49,7 @@ Gmail OAuth setup was canceled by the user in favor of a Discord channel webhook
 - [x] Remove login role chips, decorative marketing copy, misleading labels, and the disconnected forecasting probe.
 - [x] Consolidate form validation, search clearing, table contrast, navigation, and unsaved form protection.
 - [x] Complete operational list pagination, integrated frontend checks, and the final desktop/mobile browser review.
-- [ ] Push the verified commits to `origin/main`.
+- [x] Push the verified commits to `origin/main`.
 
 The verification notes below describe the earlier Discord setup. Current role-agent scope, costs, and evidence are documented in `automations/ROLE-AGENTS.md`.
 
