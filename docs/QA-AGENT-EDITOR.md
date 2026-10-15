@@ -34,26 +34,35 @@ disposable cleanup and complete preservation checks remain pending.
 
 ## Source findings and limits
 
-The reviewed n8n 2.43.6 editor source has two relevant paths:
+The reviewed n8n 2.43.6 release resolves to immutable commit
+`ffbb9ec54fc02e7f8b54a0b6f41d0a84d0a817f5`. Its editor has two relevant paths:
 
 - Mounting the model selector with an empty model can choose a default and emit
   an automatic model-field update. An existing agent can persist that update
-  even when its metadata identifies the source as automatic.
+  even when its metadata identifies the source as automatic. See the initial
+  default watcher and `onModelChange` in
+  [AgentInfoPanel.vue](https://github.com/n8n-io/n8n/blob/ffbb9ec54fc02e7f8b54a0b6f41d0a84d0a817f5/packages/frontend/editor-ui/src/features/agents/components/AgentInfoPanel.vue).
 - The editor's `onConfigFieldUpdate` handler forces `memory.enabled: true`
   during field updates. This source behavior is broader than an explicit
-  operation of the memory control.
+  operation of the memory control. Its automatic-update exception applies to
+  unsaved agents; existing agents proceed to autosave through
+  `normalizeAgentMemoryConfig` in
+  [AgentBuilderView.vue](https://github.com/n8n-io/n8n/blob/ffbb9ec54fc02e7f8b54a0b6f41d0a84d0a817f5/packages/frontend/editor-ui/src/features/agents/views/AgentBuilderView.vue).
 
-Immutable source permalinks and exact locations will be added after the source
-review handoff. The observed empty-model sequence is consistent with these
-paths. It does not prove that mounting an already configured model emits the
-same update, or that it caused the earlier production-agent drafts.
+The observed empty-model sequence is consistent with these paths. The initial
+default watcher skips a nonempty model. It does not prove that mounting an
+already configured model emits the same update, or that this path caused the
+earlier production-agent drafts.
 
 `memory.enabled` controls backend session persistence and related session
 behavior. Observational memory defaults and title generation are separate
 details of that path. Cross-session episodic memory has its own
 `memory.episodicMemory.enabled` setting. A false-to-true change in
 `memory.enabled` alone does **not** prove cross-session episodic memory became
-enabled or that any remembered information was created.
+enabled or that any remembered information was created. The backend outer
+memory gate, separate episodic opt-in, observational-memory default and title
+generation appear in `applyMemoryFromConfig` and its caller in
+[from-json-config.ts](https://github.com/n8n-io/n8n/blob/ffbb9ec54fc02e7f8b54a0b6f41d0a84d0a817f5/packages/cli/src/modules/agents/json-config/from-json-config.ts).
 
 ## Upstream-ready reproduction draft
 
@@ -78,13 +87,17 @@ until an explicit configuration action. The observed empty-model visit did not.
 The configured-model/no-credential control is still running; no result is
 inferred for that condition.
 
-## Upgrade assessment pending
+## Upgrade assessment
 
-No upgrade, external issue post or external message has been performed. An
-upgrade recommendation requires inspecting an identified newer revision for
-these exact update paths and repeating the controlled reproduction against it.
-The latest-version label alone would not establish a fix. No verified fixed
-version is claimed yet.
+On 16 October 2026, the official latest-stable release was still
+[n8n 2.43.6](https://github.com/n8n-io/n8n/releases/tag/n8n%402.43.6), published
+15 October at 07:26 UTC and resolving to the same reviewed commit above. Its
+normalization and automatic-update paths therefore remain present. No newer
+stable upgrade has been verified as a remedy.
+
+No upgrade, external issue post or external message has been performed. A
+candidate upgrade still requires checking these exact paths and repeating the
+controlled reproduction. No verified fixed version is claimed.
 
 Keep account values, credential references, object/session IDs, complete native
 configs and backups in ignored private evidence. Final evidence will distinguish
