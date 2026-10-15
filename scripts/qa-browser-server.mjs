@@ -5,6 +5,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { originalProductPhotos } from "./data/demo-catalog.mjs";
+import { productPage, orderPage, supplierPage } from "./qa-paged-fixtures.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultDist = path.resolve(here, "../client/dist");
@@ -141,13 +142,22 @@ export function createQAServer({ distRoot = defaultDist, config = {} } = {}) {
         }
         if (req.method !== "GET") return send(405, { success: false, message: "Synthetic QA is read-only. Business mutations are disabled." });
         if (pathname === "/api/health") return send(200, { success: true, synthetic: true });
+        if ([...url.searchParams.keys()].some((key) => /^(?:page|pageSize)(?:\[|\.)/.test(key))) return send(400, { message: "Structured page parameters are invalid." });
+        const paged = url.searchParams.has("page") || url.searchParams.has("pageSize");
+        // Paged catalog/discovery fixtures reproduce the existing public API boundary.
+        if (pathname === "/api/products" && paged) return send(200, productPage(fixtures, url.searchParams));
+        if (pathname === "/api/discovery/suppliers" && paged) return send(200, supplierPage(fixtures, url.searchParams));
         const role = roles.find((candidate) => req.headers.authorization === `Bearer synthetic-qa-${candidate}`);
         if (!role) return send(401, { success: false, message: "Synthetic QA login required." });
         const { users, products, categories, suppliers, orders } = fixtures;
+        const scope = { role, userId: users[role].id, supplierId: suppliers.find((row) => row.userId === users[role].id)?.id };
         const ok = (data) => send(200, { success: true, data });
         if (["/api/auth/me", "/api/users/me"].includes(pathname)) return ok(users[role]);
         if (pathname === "/api/discovery/categories") return ok(categories);
-        if (pathname === "/api/discovery/suppliers") return ok(suppliers);
+        if (pathname === "/api/discovery/suppliers") {
+          if (url.searchParams.has("includeProductCounts")) return send(400, { message: "Supplier aggregates require page." });
+          return ok(suppliers);
+        }
         if (/^\/api\/discovery\/suppliers\/\d+$/.test(pathname)) {
           const supplier = suppliers.find((row) => row.id === Number(pathname.split("/").at(-1)));
           return supplier ? ok(supplier) : send(404, { message: "Supplier not found." });
@@ -164,7 +174,11 @@ export function createQAServer({ distRoot = defaultDist, config = {} } = {}) {
           return product ? ok({ ...product, category: categories[product.categoryId - 1], supplier: suppliers[product.supplierId - 1] }) : send(404, { message: "Product not found." });
         }
         const scopedOrders = role === "SUPPLIER" ? orders.filter((order) => order.orderItems.some((item) => item.product.supplierId === 1)) : orders;
-        if (pathname === "/api/orders") return ok(role === "SUPPLIER" ? scopedOrders.map((order) => ({ ...order, orderItems: order.orderItems.filter((item) => item.product.supplierId === 1) })) : scopedOrders);
+        if (pathname === "/api/orders") {
+          if (paged) return send(200, orderPage(fixtures, url.searchParams, scope));
+          if (url.searchParams.has("view")) return send(400, { message: "Order views require page." });
+          return ok(role === "SUPPLIER" ? scopedOrders.map((order) => ({ ...order, orderItems: order.orderItems.filter((item) => item.product.supplierId === 1) })) : scopedOrders);
+        }
         if (/^\/api\/orders\/\d+$/.test(pathname)) {
           const order = scopedOrders.find((row) => row.id === Number(pathname.split("/").at(-1)));
           return order ? ok(order) : send(404, { message: "Order not found." });

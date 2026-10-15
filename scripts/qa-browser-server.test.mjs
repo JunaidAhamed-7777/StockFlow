@@ -112,6 +112,55 @@ test("loopback synthetic server isolates writes, filters fixtures, and sanitizes
     assert.ok(supplierOrders.every((order) => order.orderItems.every((item) => item.product.supplierId === 1)));
     const detail = (await (await request(`/api/orders/${supplierOrders[0].id}`, { headers: { Authorization: "Bearer synthetic-qa-SUPPLIER" } })).json()).data;
     assert.equal(detail.orderItems.length, 3);
+    assert.ok(detail.orderItems.some((item) => item.product.supplierId !== 1));
+    assert.equal(detail.hasOtherSuppliers, undefined);
+    assert.equal(detail.totalAmount, detail.orderItems.reduce((sum, item) => sum + item.quantity * item.price, 0));
+  });
+
+  await t.test("structured paging keys fail before authentication and empty sort values fail closed", async () => {
+    for (const endpoint of ["products", "orders", "discovery/suppliers"]) {
+      for (const query of ["page[]=1", "page[foo]=1", "pageSize[]=20", "pageSize[foo]=20", "page.value=1"]) {
+        assert.equal((await request(`/api/${endpoint}?${query}`)).status, 400);
+        assert.equal((await request(`/api/${endpoint}?${query}`, { headers: auth })).status, 400);
+      }
+      for (const query of ["page=1&sortBy=", "page=1&sortOrder="]) assert.equal((await request(`/api/${endpoint}?${query}`, { headers: auth })).status, 400);
+    }
+  });
+
+  await t.test("paged products stay public across roles, preserve legacy reads and validate queries", async () => {
+    const url = "/api/products?page=2&pageSize=12";
+    const anonymous = await request(url);
+    assert.equal(anonymous.status, 200);
+    const page = await anonymous.json();
+    assert.deepEqual(page.data.map((row) => row.id), Array.from({ length: 12 }, (_, index) => index + 13));
+    assert.equal(page.pagination.total, 44); assert.equal(page.summary.productCount, 44);
+    assert.doesNotMatch(JSON.stringify(page.data), /description|supplier":/);
+    for (const role of ["CUSTOMER", "SUPPLIER", "ADMIN"]) {
+      assert.deepEqual(await (await request(url, { headers: { Authorization: `Bearer synthetic-qa-${role}` } })).json(), page);
+    }
+    const legacy = await (await request("/api/products", { headers: auth })).json();
+    assert.equal(legacy.data.length, 44); assert.equal(legacy.pagination, undefined);
+    assert.equal((await request("/api/products")).status, 401);
+    for (const query of ["pageSize=20", "page=1&page=2", "page=1&search=a&search=b"]) assert.equal((await request(`/api/products?${query}`)).status, 400);
+    const trimmed = await (await request("/api/products?page=1&search=%20QA-000044%20")).json();
+    assert.deepEqual(trimmed.data.map((row) => row.id), [44]);
+  });
+
+  await t.test("paged order and directory views enforce scope, compact shapes and opt-in aggregates", async () => {
+    assert.equal((await request("/api/orders?page=1")).status, 401);
+    const headers = { Authorization: "Bearer synthetic-qa-SUPPLIER" };
+    const orders = await (await request("/api/orders?page=1&pageSize=1", { headers })).json();
+    assert.equal(orders.data[0].amountScope, "SUPPLIER_ITEMS"); assert.equal(orders.data[0].hasOtherSuppliers, true);
+    assert.doesNotMatch(JSON.stringify(orders), /orderItems|totalAmount|password|address/);
+    assert.equal((await request("/api/orders?view=customers", { headers: auth })).status, 400);
+    for (const role of ["CUSTOMER", "SUPPLIER"]) assert.equal((await request("/api/orders?view=customers&page=1", { headers: { Authorization: `Bearer synthetic-qa-${role}` } })).status, 403);
+    const customers = await (await request("/api/orders?view=customers&page=1", { headers: auth })).json();
+    assert.equal(customers.data[0].orderCount, 44);
+    assert.equal(customers.data[0].totalSpending, customers.summary.totalSpending);
+    assert.deepEqual(Object.keys(customers.summary).sort(), ["customerCount", "totalSpending"]);
+    const suppliers = await (await request("/api/discovery/suppliers?page=1&includeProductCounts=true")).json();
+    assert.equal(suppliers.pagination.total, 4); assert.ok(suppliers.data.every((row) => row.productCount === 11));
+    assert.equal((await request("/api/discovery/suppliers?includeProductCounts=true", { headers: auth })).status, 400);
   });
 
   await t.test("report storage is redacted, bounded, resettable and tied to fixture configuration", async () => {
