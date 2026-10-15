@@ -219,3 +219,21 @@ test('additional workflows read only existing order and category endpoints', () 
     }
   }
 });
+
+test('every generated acknowledgement rejects impossible Discord IDs and advances only the paired owner', () => {
+  for (const { workflow, mode } of workflows) {
+    const one = { supplierId: 1, events: [{ key: `${mode}:1`, at: 1 }] };
+    const two = { supplierId: 2, events: [{ key: `${mode}:2`, at: 1 }] };
+    const source = { 'Delivery enabled': one };
+    const state = { sent: { unrelated: { at: 4 } } };
+    const before = structuredClone(state);
+    for (const id of ['00000000000000000', '012345678901234567', '18446744073709551616', '99999999999999999999']) {
+      assert.equal(executeCode(workflow, 'Remember successful delivery', { source, state, json: { id } }).json.delivered, false);
+      assert.deepEqual(state, before);
+    }
+    assert.equal(executeCode(workflow, 'Remember successful delivery', { source, state, json: { id: '18446744073709551615' } }).json.delivered, true);
+    assert.deepEqual(state.sent[one.events[0].key], one.events[0]);
+    assert.equal(state.sent[two.events[0].key], undefined);
+    assert.deepEqual(state.sent.unrelated, { at: 4 });
+  }
+});
