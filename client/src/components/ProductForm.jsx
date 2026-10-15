@@ -43,13 +43,17 @@ export function ProductForm({ productId, cancelTo, successTo }) {
       setError("");
       setLoadError("");
       try {
-        const [cats, sups] = await Promise.all([getCategories(), getSuppliers()]);
+        const [cats, sups] = await Promise.all([getCategories(), role === "ADMIN" ? getSuppliers() : Promise.resolve([])]);
         if (cancelled) return;
         setCategories(cats || []);
         setSuppliers(sups || []);
         if (isEdit) {
           const product = await getProduct(productId);
           if (cancelled) return;
+          if (role === "SUPPLIER" && Number(product.supplierId) !== Number(supplier?.id)) {
+            setLoadError("You can only edit products assigned to your supplier profile.");
+            return;
+          }
           setForm({
             name: product.name || "",
             description: product.description || "",
@@ -97,7 +101,7 @@ export function ProductForm({ productId, cancelTo, successTo }) {
       lowStockThreshold: Number(form.lowStockThreshold),
       categoryId: Number(form.categoryId),
     };
-    if (!payload.name || !payload.sku || !Number.isSafeInteger(payload.categoryId) || payload.categoryId < 1 || !Number.isFinite(payload.price) || payload.price < 0 || !Number.isSafeInteger(payload.quantity) || payload.quantity < 0 || !Number.isSafeInteger(payload.lowStockThreshold) || payload.lowStockThreshold < 0 || form.price === "" || form.quantity === "" || form.lowStockThreshold === "") {
+    if (!payload.name || !payload.sku || !Number.isSafeInteger(payload.categoryId) || payload.categoryId < 1 || !Number.isFinite(payload.price) || payload.price < 0 || !Number.isSafeInteger(payload.quantity) || payload.quantity < 0 || payload.quantity > 2147483647 || !Number.isSafeInteger(payload.lowStockThreshold) || payload.lowStockThreshold < 0 || payload.lowStockThreshold > 2147483647 || form.price === "" || form.quantity === "" || form.lowStockThreshold === "") {
       setError("Enter a name, SKU and category, a valid non-negative price, and non-negative whole numbers for stock and threshold.");
       setSaving(false);
       return;

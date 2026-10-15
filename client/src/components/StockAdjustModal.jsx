@@ -25,7 +25,7 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
       setError("Enter a non-zero whole number for the quantity change.");
       return;
     }
-    if (!Number.isSafeInteger(Number(product.quantity) + change) || Number(product.quantity) + change < 0) {
+    if (!Number.isSafeInteger(Number(product.quantity) + change) || Number(product.quantity) + change < 0 || Number(product.quantity) + change > 2147483647) {
       setError("This adjustment would put stock below zero or exceed the supported quantity. Enter a smaller change.");
       return;
     }
@@ -77,6 +77,7 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
           type="number"
           step="1"
           min={-Number(product.quantity)}
+          max={2147483647 - Number(product.quantity)}
           disabled={saving}
           value={quantityChange}
           onChange={(e) => setQuantityChange(e.target.value)}
