@@ -4,13 +4,14 @@ import { Button } from "./ui/Button";
 import { Input, Select, Textarea } from "./ui/Input";
 import { Card } from "./ui/Card";
 import { ErrorState } from "./ui/ErrorState";
-import { Icon } from "./ui/Icon";
 import { PageHeader } from "./ui/PageHeader";
 import { getErrorMessage } from "../utils/errors";
 import { createProduct, getProduct, updateProduct } from "../services/product.service";
 import { getCategories, getSuppliers } from "../services/discovery.service";
 import { useAuth } from "../context/AuthContext";
 import { Loading } from "./ui/Loading";
+import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
+import { clearFieldError, focusFirstError, validateForm } from "../utils/formValidation";
 
 const emptyForm = {
   name: "",
@@ -28,6 +29,8 @@ export function ProductForm({ productId, cancelTo, successTo }) {
   const { role, supplier } = useAuth();
   const isEdit = Boolean(productId);
   const [form, setForm] = useState(emptyForm);
+  const [initialForm, setInitialForm] = useState(emptyForm);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +57,7 @@ export function ProductForm({ productId, cancelTo, successTo }) {
             setLoadError("You can only edit products assigned to your supplier profile.");
             return;
           }
-          setForm({
+          const values = {
             name: product.name || "",
             description: product.description || "",
             sku: product.sku || "",
@@ -63,13 +66,18 @@ export function ProductForm({ productId, cancelTo, successTo }) {
             lowStockThreshold: String(product.lowStockThreshold ?? 10),
             categoryId: String(product.categoryId ?? ""),
             supplierId: String(product.supplierId ?? ""),
-          });
+          };
+          setForm(values);
+          setInitialForm(values);
         } else if (role === "SUPPLIER" && supplier?.id) {
-          setForm({ ...emptyForm, supplierId: String(supplier.id) });
+          const values = { ...emptyForm, supplierId: String(supplier.id) };
+          setForm(values);
+          setInitialForm(values);
         } else if (role === "SUPPLIER") {
           setLoadError("No supplier profile is linked to this account. A supplier profile is required to manage products.");
         } else {
           setForm(emptyForm);
+          setInitialForm(emptyForm);
         }
       } catch (err) {
         if (!cancelled) setLoadError(getErrorMessage(err));
@@ -85,13 +93,19 @@ export function ProductForm({ productId, cancelTo, successTo }) {
 
   function setField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => clearFieldError(current, key));
   }
 
   async function onSubmit(event) {
     event.preventDefault();
     if (saving) return;
-    setSaving(true);
+    const errors = validateForm(event.currentTarget);
+    if (!categories.some((category) => Number(category.id) === Number(form.categoryId))) errors.categoryId = "Select an available category.";
+    if (role === "ADMIN" && !suppliers.some((owner) => Number(owner.id) === Number(form.supplierId))) errors.supplierId = "Select an available supplier.";
+    setFieldErrors(errors);
     setError("");
+    if (Object.keys(errors).length) { focusFirstError(event.currentTarget, errors); return; }
+    setSaving(true);
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
@@ -142,12 +156,13 @@ export function ProductForm({ productId, cancelTo, successTo }) {
 
   return (
     <>
+      <UnsavedChangesGuard dirty={JSON.stringify(form) !== JSON.stringify(initialForm)} busy={loading || saving} />
       <PageHeader
         breadcrumb={
           <>
             <span>Products</span>
             <span className="text-outline-variant">/</span>
-            <span className="text-secondary font-medium">{isEdit ? "Edit specification" : "Create SKU"}</span>
+            <span className="text-secondary font-medium">{isEdit ? "Edit product" : "New product"}</span>
           </>
         }
         title={isEdit ? "Edit product" : "Create product"}
@@ -155,44 +170,38 @@ export function ProductForm({ productId, cancelTo, successTo }) {
         actions={
           <>
             <Button variant="outline" disabled={saving} onClick={() => navigate(cancelTo)}>Cancel</Button>
-            <Button variant="dark" type="submit" form="product-form" loading={saving} disabled={role === "SUPPLIER" && !supplier?.id} icon={<Icon name="publish" size={16} />}>
-              {isEdit ? "Save SKU" : "Publish SKU"}
+            <Button type="submit" form="product-form" loading={saving} disabled={role === "SUPPLIER" && !supplier?.id}>
+              {isEdit ? "Save changes" : "Create product"}
             </Button>
           </>
         }
       />
       {error ? <ErrorState message={error} /> : null}
-      <form id="product-form" onSubmit={onSubmit}>
+      <form id="product-form" noValidate onSubmit={onSubmit} aria-busy={saving}>
       <fieldset disabled={saving} className="grid grid-cols-1 lg:grid-cols-12 gap-space-xl min-w-0">
         <legend className="sr-only">Product information</legend>
         <Card className="lg:col-span-8 p-space-xl flex flex-col gap-space-md">
-          <div className="flex items-center gap-space-xs">
-            <Icon name="fingerprint" className="text-secondary" />
-            <h2 className="font-headline-sm text-headline-sm">Core Identification</h2>
-          </div>
-          <Input id="name" label="Product name" maxLength={200} value={form.name} onChange={(e) => setField("name", e.target.value)} required />
+          <h2 className="font-headline-sm text-headline-sm">Product details</h2>
+          <Input id="name" name="name" label="Product name" error={fieldErrors.name} maxLength={200} value={form.name} onChange={(e) => setField("name", e.target.value)} required />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
-            <Input id="sku" label="SKU" maxLength={100} value={form.sku} onChange={(e) => setField("sku", e.target.value)} required />
-            <Select id="categoryId" label="Category" value={form.categoryId} onChange={(e) => setField("categoryId", e.target.value)} required>
+            <Input id="sku" name="sku" label="SKU" error={fieldErrors.sku} maxLength={100} value={form.sku} onChange={(e) => setField("sku", e.target.value)} required />
+            <Select id="categoryId" name="categoryId" label="Category" error={fieldErrors.categoryId} value={form.categoryId} onChange={(e) => setField("categoryId", e.target.value)} required>
               <option value="">Select category</option>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>{category.name}</option>
               ))}
             </Select>
           </div>
-          <Textarea id="description" label="Description" maxLength={4000} value={form.description} onChange={(e) => setField("description", e.target.value)} />
+          <Textarea id="description" name="description" label="Description" error={fieldErrors.description} className="resize-none" maxLength={4000} value={form.description} onChange={(e) => setField("description", e.target.value)} />
         </Card>
         <Card className="lg:col-span-4 p-space-xl flex flex-col gap-space-md">
-          <div className="flex items-center gap-space-xs">
-            <Icon name="payments" className="text-secondary" />
-            <h2 className="font-headline-sm text-headline-sm">Pricing & Stock</h2>
-          </div>
-          <Input id="price" label="Unit price" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setField("price", e.target.value)} required />
-          <Input id="quantity" label={isEdit ? "Stock when form opened" : "Initial quantity"} hint={isEdit ? "Reference only. Product edits do not change inventory." : "Opening stock for this new product."} readOnly={isEdit} type="number" min="0" max="2147483647" step="1" value={form.quantity} onChange={(e) => setField("quantity", e.target.value)} required={!isEdit} />
+          <h2 className="font-headline-sm text-headline-sm">Pricing and stock</h2>
+          <Input id="price" name="price" label="Unit price" error={fieldErrors.price} type="number" min="0" step="0.01" value={form.price} onChange={(e) => setField("price", e.target.value)} required />
+          <Input id="quantity" name="quantity" label={isEdit ? "Stock when form opened" : "Initial quantity"} error={fieldErrors.quantity} hint={isEdit ? "Reference only. Product edits do not change inventory." : "Opening stock for this new product."} readOnly={isEdit} type="number" min="0" max="2147483647" step="1" value={form.quantity} onChange={(e) => setField("quantity", e.target.value)} required={!isEdit} />
           {isEdit ? <p className="font-caption text-on-surface-variant"><Link className="text-secondary underline underline-offset-2" to={role === "ADMIN" ? "/admin/inventory" : "/supplier/stock"}>Record a stock adjustment</Link> to receive or issue units with an audit reason.</p> : null}
-          <Input id="lowStockThreshold" label="Low-stock threshold" hint="Flag this product when stock reaches this quantity or lower." type="number" min="0" max="2147483647" step="1" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} required />
+          <Input id="lowStockThreshold" name="lowStockThreshold" label="Low-stock threshold" error={fieldErrors.lowStockThreshold} hint="Flag this product when stock reaches this quantity or lower." type="number" min="0" max="2147483647" step="1" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} required />
           {role === "ADMIN" ? (
-            <Select id="supplierId" label="Supplier" value={form.supplierId} onChange={(e) => setField("supplierId", e.target.value)} required>
+            <Select id="supplierId" name="supplierId" label="Supplier" error={fieldErrors.supplierId} value={form.supplierId} onChange={(e) => setField("supplierId", e.target.value)} required>
               <option value="">Select supplier</option>
               {suppliers.map((item) => (
                 <option key={item.id} value={item.id}>{item.companyName}</option>
@@ -203,7 +212,7 @@ export function ProductForm({ productId, cancelTo, successTo }) {
               Supplier ownership is assigned automatically to {supplier?.companyName || "your supplier profile"}.
             </div>
           )}
-          <Button type="submit" variant="dark" loading={saving} disabled={role === "SUPPLIER" && !supplier?.id}>{isEdit ? "Save changes" : "Create product"}</Button>
+          <Button type="submit" loading={saving} disabled={role === "SUPPLIER" && !supplier?.id}>{isEdit ? "Save changes" : "Create product"}</Button>
         </Card>
       </fieldset>
       </form>
