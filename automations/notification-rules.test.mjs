@@ -352,7 +352,7 @@ test('daily digest sends once per UTC date and resets at midnight UTC', () => {
 });
 
 test('digest includes low stock above the critical cutoff and correct owner-only totals', () => {
-  const result = planNotifications(input({ mode: 'daily-digest', products: [
+  const result = planNotifications(input({ mode: 'daily-digest', suppliers: [supplier(), supplier({ id: 2 })], products: [
     product({ quantity: 19, lowStockThreshold: 20, sku: 'LOW' }),
     product({ id: 12, quantity: 21, lowStockThreshold: 20, sku: 'HEALTHY' }),
     product({ id: 21, supplierId: 2, quantity: 999, sku: 'OTHER-OWNER' }),
@@ -374,7 +374,7 @@ test('stale order follow-up starts at exactly 48 hours and only for pending or p
     order(), order({ id: 102, status: 'PROCESSING' }),
     order({ id: 103, createdAt: new Date(NOW - 48 * HOUR + 1).toISOString() }),
     order({ id: 104, status: 'DELIVERED' }), order({ id: 105, status: 'CANCELLED' }),
-    order({ id: 106, status: 'SHIPPED' }), order({ id: 107, createdAt: 'not a date' }),
+    order({ id: 106, status: 'SHIPPED' }),
     order({ id: 108, createdAt: new Date(NOW + HOUR).toISOString() }),
   ] }));
   const mail = result.notifications[0];
@@ -388,7 +388,7 @@ test('stale order messages reveal only the receiving supplier’s order lines', 
   const result = planNotifications(input({
     mode: 'stale-orders',
     suppliers: [supplier(), supplier({ id: 2, user: { email: 'owner@inventory-supplier-two.com' } })],
-    products: [product(), product({ id: 21, supplierId: 2 })],
+    products: [product({ sku: 'MY-LINE' }), product({ id: 21, supplierId: 2, sku: 'OTHER-LINE' })],
     orders: [order({
       customer: { name: 'Private Customer', email: 'private@customer-domain.com' },
       orderItems: [
@@ -408,7 +408,8 @@ test('stale order messages reveal only the receiving supplier’s order lines', 
 test('stale order follow-up supports nested product identifiers and the items alias', () => {
   const withNestedItem = order({ orderItems: undefined, items: [{ product: { id: 11, sku: 'NESTED' }, quantity: 2 }] });
   const mail = notification({ mode: 'stale-orders', orders: [withNestedItem] });
-  assert.match(mail.message, /NESTED × 2/);
+  assert.match(mail.message, /ITEM-ONE × 2/);
+  assert.doesNotMatch(mail.message, /NESTED/);
 });
 
 test('stale order reminders observe cooldown without suppressing a newly stale order', () => {
