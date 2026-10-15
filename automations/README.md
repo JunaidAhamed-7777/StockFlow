@@ -27,7 +27,7 @@ The n8n owner login authorizes the local editor; it does not authorize Gmail. Go
 3. In local n8n, create a **Gmail OAuth2 API** credential and enter its client ID and client secret. Turn **Custom Scopes** on. Set **Enabled Scopes** to exactly `https://www.googleapis.com/auth/gmail.send`. Complete **Sign in with Google** using the intended sender, grant send permission, and save the connected credential.
 4. Leave the Gmail node's **Sender Name** option unset: it triggers an extra profile request requiring broader access. Sending does not require permission to read, change, or delete mailbox messages.
 5. Keep client secrets and OAuth tokens in n8n's encrypted credential store. Do not commit them, put them in documentation, or embed them in Code nodes. Saved client details without completed Google consent do not authorize sending.
-6. Review redirected previews and use the activation command below with the connected credential's ID. It enables only critical stock alerts; the other four remain previews.
+6. Review redirected previews, run the one-message connection test below, then use the activation command with the connected credential's ID. It enables only critical stock alerts; the other four remain previews.
 
 An External app with publishing status **Testing** receives refresh tokens that expire after **seven days**, including for `gmail.send`; reconnect when they expire. For ongoing personal use, Google documents a verification exemption for apps with fewer than 100 users. An appropriate **In production** personal-use configuration avoids the Testing-specific limit, but may still show an unverified-app warning and remains subject to Google's policies/user limits. Reconnect after changing publishing status. Publishing status is not OAuth verification and does not make tokens permanent: revocation, password changes involving Gmail scopes, inactivity, and token limits can still invalidate them.
 
@@ -63,7 +63,18 @@ node automations/update-local.mjs --apply --defer-restart
 
 This records `restartPending`. Runtime schedules may use previous definitions until n8n restarts. Complete the OAuth form first, then restart n8n and verify previews. Deferred restart cannot be combined with live activation.
 
-After completing OAuth and reviewing previews, enable **only critical stock alerts**:
+After completing OAuth, review and send one explicitly labeled connection test:
+
+```powershell
+node automations/test-gmail-local.mjs
+node automations/test-gmail-local.mjs --send --gmail-credential-id=CONNECTED_CREDENTIAL_ID
+```
+
+The first command only prints the message for review and makes no credential reads or n8n changes. The second validates the connected send-only credential and sends one **CONNECTION TEST** to the fixed redirect mailbox. It includes fictional Supplier Test attribution and makes no inventory claim. It imports and retains the inactive, manual-only draft `StockFlowGmailTest01`; it never publishes a schedule, changes stock, or calls OpenAI. Before execution it rechecks the exact draft graph, including the Gmail destination and absence of CC/BCC, Sender Name, or retries. The CLI's deprecated `--file` option is no longer supported in the installed n8n version, so this uses import plus `execute --id`.
+
+Only confirmed success and the Gmail message ID are printed. Per-credential attempt markers are stored in ignored `.local/gmail-connection-tests/`. Confirmed or ambiguous attempts block another send unless `--repeat` is deliberately supplied; inspect the mailbox/marker first to avoid duplicate tests. An interrupted-process lock also blocks sends until inspected. If the retained draft was changed or points to a different credential, the helper refuses to overwrite it; review/remove that inactive test draft in n8n before using a different credential.
+
+After a confirmed test and reviewing previews, enable **only critical stock alerts**:
 
 ```powershell
 node automations/update-local.mjs --apply --enable-low-stock --gmail-credential-id=CONNECTED_CREDENTIAL_ID
