@@ -37,7 +37,7 @@ export function AdminAI() {
       <PageHeader
         title="Automations"
         description="Scheduled stock checks and account reviews, managed in local n8n."
-        actions={<a href="http://localhost:5678/assistant" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-space-sm rounded-lg bg-secondary px-space-md text-sm font-semibold text-white hover:bg-secondary-container">Open n8n<Icon name="open_in_new" size={16} /></a>}
+        actions={<a href="http://localhost:5678/home/agents" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-space-sm rounded-lg bg-secondary px-space-md text-sm font-semibold text-white hover:bg-secondary-container">Open n8n<Icon name="open_in_new" size={16} /></a>}
       />
       <section aria-labelledby="agents-heading" className="space-y-space-md">
         <div><h2 id="agents-heading" className="text-lg font-semibold">Account review agents</h2><p className="mt-1 max-w-3xl text-sm text-on-surface-variant">GPT-5 mini prepares reviews and drafts from verified records. Each agent is bound to the account below; it does not act as the person currently signed in to StockFlow. Changes are applied through the relevant StockFlow screen.</p></div>

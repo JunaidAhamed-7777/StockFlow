@@ -4,7 +4,7 @@ Three native n8n agents are published in the existing Personal project. The exis
 
 ## Access and schedules
 
-Open [local n8n](http://localhost:5678/assistant), then the Personal project's Agents tab. Select an agent to start a chat or inspect its Sessions and scheduled tasks. The n8n owner login and every StockFlow account login are recorded privately in `.local/LOGIN-ACCOUNTS.md`, which Git ignores.
+Open [local n8n](http://localhost:5678/home/agents), then the Personal project's Agents tab. Select an agent to start a chat or inspect its Sessions and scheduled tasks. The n8n owner login and every StockFlow account login are recorded privately in `.local/LOGIN-ACCOUNTS.md`, which Git ignores.
 
 - **Admin Notification** uses **StockFlow Local Automation**, an ADMIN API account. It reviews inventory exceptions and all-order summaries every day at **09:15 IST**.
 - **Supplier Assistant** uses **Supplier Test**. It reviews that supplier's products, stock, and own order lines on weekdays at **09:30 IST**.
