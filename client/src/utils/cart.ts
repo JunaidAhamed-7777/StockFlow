@@ -10,6 +10,7 @@ export interface CartItem {
 }
 
 export function isPositiveInteger(value: unknown): boolean {
+  if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return false;
   const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 && number <= MAX_QUANTITY;
 }
@@ -21,6 +22,8 @@ export function sanitizeCart(value: unknown): CartItem[] {
   for (const candidate of value) {
     if (!candidate || typeof candidate !== "object") continue;
     const row = candidate as Record<string, unknown>;
+    if (![row.productId, row.quantity, row.stock].every(isPositiveInteger)) continue;
+    if (typeof row.price !== "number" && (typeof row.price !== "string" || !row.price.trim())) continue;
     const productId = Number(row.productId);
     const price = Number(row.price);
     const quantity = Number(row.quantity);

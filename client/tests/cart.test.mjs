@@ -5,7 +5,7 @@ import { sanitizeCart, isPositiveInteger, MAX_QUANTITY } from "../src/utils/cart
 const line = { productId: 1, name: "Packing tape", sku: "TAPE-01", price: 9.5, quantity: 2, stock: 5 };
 
 test("untrusted persisted carts reject unavailable, fractional, and non-finite quantities", () => {
-  const invalid = [0, -1, 1.2, Infinity, NaN, MAX_QUANTITY + 1];
+  const invalid = [0, -1, 1.2, Infinity, NaN, MAX_QUANTITY + 1, true, false, [], [1], {}, null, ""];
   for (const value of invalid) {
     assert.equal(isPositiveInteger(value), false);
     assert.deepEqual(sanitizeCart([{ ...line, quantity: value }]), []);
