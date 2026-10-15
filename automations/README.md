@@ -44,6 +44,8 @@ An ordinary `--apply` restores **every workflow to `notificationsEnabled: false`
 
 After publishing, the updater restarts n8n, waits for `/healthz/readiness`, rechecks all five stored graphs, state, settings and published versions, and checks their active status and activation errors. Owner authentication for maintenance is used only by `--apply`; a dry run does not read the private owner login or authenticate to n8n. No connection test or manual workflow execution is part of migration. A failure leaves an explicit paused or unverified maintenance status and never restores old definitions automatically. If a failure occurs after restart, the updater attempts to pause the five notification schedules again. Inspect that status and the private backup before retrying.
 
+Only one apply can run at a time. The private `.local/notification-update.lock` is released by its owning run; a lock left by an interrupted run is preserved for inspection rather than removed by guessing whether its process is still active.
+
 `--apply --defer-restart` stores published preview definitions without restarting immediately and records `restartPending`. The five notification schedules remain paused until a controlled restart and verification; unrelated schedules are preserved. It cannot be combined with live activation.
 
 The preview verifier checks all five installed graphs before executing any and rechecks each immediately before its run. It refuses any enabled or changed executable workflow, including changes to the planner, sanitization, transport, delivery guard, pinned data, or routing. It allows the encrypted Discord credential reference and harmless UI changes. **Do not use it to test live delivery.** Return to previews with an ordinary `--apply` first.

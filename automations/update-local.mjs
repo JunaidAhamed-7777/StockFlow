@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, readdirSync, openSync, closeSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { validateRuntimeConfig, validateN8nContainer } from '../scripts/runtime-safety.mjs';
@@ -15,6 +15,23 @@ const canonical = (value) => Array.isArray(value) ? value.map(canonical)
   : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
 const hash = (value) => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const validCredentialId = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+
+function acquireUpdateLock(local) {
+  const filename = path.join(local, 'notification-update.lock');
+  const owner = { pid: process.pid, token: randomUUID() };
+  let descriptor;
+  try { descriptor = openSync(filename, 'wx', 0o600); }
+  catch { fail('Another notification migration or an unresolved prior lock exists. Inspect the private notification-update lock before retrying.'); }
+  try { writeFileSync(descriptor, JSON.stringify(owner)); }
+  finally { closeSync(descriptor); }
+  return () => {
+    let current;
+    try { current = JSON.parse(readFileSync(filename, 'utf8')); }
+    catch { fail('Notification migration lock ownership could not be verified for release. Inspect the private lock before retrying.'); }
+    if (current.pid !== owner.pid || current.token !== owner.token) fail('Notification migration lock ownership changed. The replacement lock was preserved.');
+    unlinkSync(filename);
+  };
+}
 
 function publishedVersionMatches(workflow) {
   if (workflow.active !== true || typeof workflow.versionId !== 'string' || !workflow.versionId
@@ -69,6 +86,7 @@ export async function updateLocal({
   maintenanceFactory = createNotificationMaintenance,
   log = console.log,
 } = {}) {
+  let releaseLock;
   try {
     const local = path.join(root, '.local');
     const flags = ['--apply', '--enable-low-stock', '--defer-restart'];
@@ -95,6 +113,7 @@ export async function updateLocal({
 
     const runtime = JSON.parse(readFileSync(path.join(local, 'runtime.json'), 'utf8'));
     validateRuntimeConfig(runtime);
+    if (apply) releaseLock = acquireUpdateLock(local);
     const docker = async (command, input) => {
       try { return await dockerCapture(command, input); }
       catch { fail('Local n8n operation failed. Sensitive subprocess output was withheld.'); }
@@ -218,7 +237,7 @@ export async function updateLocal({
     } catch (error) {
       if (restartAttempted || workflowWritesStarted) {
         try { await maintenance.quiesce(requireManaged(await exportWorkflows('pause-failed-update'))); paused = true; }
-        catch { paused = false; }
+        catch (pauseError) { paused = pauseError?.paused === true; }
       } else if (error?.paused === true) paused = true;
       writeMaintenanceStatus(paused ? 'paused-after-failure' : 'failed-unverified', paused ? [] : null,
         paused ? 'Migration failed. The notification schedules remain paused; inspect the backup before retrying. No definitions were restored automatically.'
@@ -232,6 +251,8 @@ export async function updateLocal({
   } catch (error) {
     if (error instanceof UpdateLocalError) throw error;
     throw new UpdateLocalError('Local n8n update failed. Sensitive local data and subprocess output were withheld.');
+  } finally {
+    releaseLock?.();
   }
 }
 

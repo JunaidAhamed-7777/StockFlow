@@ -109,7 +109,7 @@ function fixture(t, { discord = true } = {}) {
             const current = state.workflows.get(workflow.id);
             current.active = false; current.activeVersionId = null; delete current.activeVersion;
           }
-          state.afterQuiesce?.();
+          await state.afterQuiesce?.();
         },
         verifyActive: async (ids) => {
           assert.deepEqual([...ids].sort(), Object.keys(WORKFLOW_MODES).sort());
@@ -183,6 +183,7 @@ test('dry run exports and validates proposals without importing, publishing, res
   assert.equal(f.state.healthCalls, 0); assert.equal(f.state.waits, 0); assert.equal(f.state.files.size, 0);
   assert.equal(existsSync(path.join(f.local, 'n8n-backups')), false); assert.equal(existsSync(f.statusPath), false);
   assert.equal(f.state.maintenanceCreations, 0, 'dry run never constructs owner-authenticated maintenance');
+  assert.equal(existsSync(path.join(f.local, 'notification-update.lock')), false);
 });
 
 test('confirmed activation enables only critical stock delivery for the exact current webhook', async (t) => {
@@ -392,5 +393,34 @@ test('post-restart stored-state corruption or activation failures pause all five
     assert.deepEqual(status.enabledWorkflows, []); assert.equal(status.deliveryVerified, false);
     assert.equal(f.state.maintenanceCalls.filter((call) => call === 'quiesce').length, 2);
     assert.ok(Object.keys(WORKFLOW_MODES).every((id) => f.state.workflows.get(id).active === false));
+  }
+});
+
+test('an exclusive apply lock prevents interleaved migrations and releases only its own completed run', async (t) => {
+  const f = fixture(t);
+  let enter, resume;
+  const entered = new Promise((resolve) => { enter = resolve; });
+  const gate = new Promise((resolve) => { resume = resolve; });
+  f.state.afterQuiesce = async () => { enter(); await gate; };
+  const first = updateLocal(f.options);
+  await entered;
+  const lock = path.join(f.local, 'notification-update.lock');
+  const owner = readFileSync(lock, 'utf8');
+  const before = f.state.ledger.length;
+  await assert.rejects(updateLocal(f.options), /Another notification migration/);
+  assert.equal(f.state.ledger.length, before, 'contender cannot export, import, authenticate or restart');
+  assert.equal(readFileSync(lock, 'utf8'), owner);
+  resume(); await first;
+  assert.equal(existsSync(lock), false);
+});
+
+test('stale, malformed or foreign migration locks are preserved without attempting recovery', async (t) => {
+  for (const previous of ['{partial', JSON.stringify({ pid: 1, token: 'previous-owner' })]) {
+    const f = fixture(t);
+    const lock = path.join(f.local, 'notification-update.lock');
+    writeFileSync(lock, previous);
+    await assert.rejects(updateLocal(f.options), /unresolved prior lock/);
+    assert.equal(readFileSync(lock, 'utf8'), previous);
+    assert.deepEqual(f.state.ledger, []); assert.equal(f.state.maintenanceCreations, 0);
   }
 });
