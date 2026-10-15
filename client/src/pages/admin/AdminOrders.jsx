@@ -48,6 +48,10 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
     return isSupplier ? visibleItems(order).reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0) : order.totalAmount;
   }
 
+  function canChangeOrder(order) {
+    return canUpdateStatus && (!isSupplier || (order?.orderItems?.length > 0 && order.orderItems.every((item) => Number(item.product?.supplierId) === Number(supplier?.id))));
+  }
+
   async function load() {
     setLoading(true);
     setError("");
@@ -91,7 +95,7 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
   }
 
   async function saveStatus() {
-    if (saving || !detail || !(NEXT_STATUSES[detail.status] || []).includes(status)) return;
+    if (saving || !detail || !canChangeOrder(detail) || !(NEXT_STATUSES[detail.status] || []).includes(status)) return;
     setSaving(true);
     setDetailError("");
     setMessage("");
@@ -147,8 +151,9 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
         open={Boolean(selected)}
         title={`Order #${selected?.id || ""}`}
         onClose={closeOrder}
+        dismissible={!saving}
         wide
-        footer={canUpdateStatus && detail && nextStatuses.length ? <>
+        footer={detail && canChangeOrder(detail) && nextStatuses.length ? <>
           <Select id="order-status" label="Update status" value={status} disabled={saving} onChange={(event) => setStatus(event.target.value)}>
             <option value={detail.status}>{detail.status}</option>
             {nextStatuses.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -167,6 +172,7 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
               <div><dt className="text-outline">Created</dt><dd>{formatDate(detail.createdAt)}</dd></div>
             </dl>
             {isSupplier ? <p className="font-caption text-on-surface-variant">Only your supplied items are shown. The fulfillment status applies to the whole order.</p> : null}
+            {isSupplier && !canChangeOrder(detail) ? <p className="font-body-sm text-amber-800 bg-amber-50 border border-amber-200 rounded p-space-sm">This order includes items from other suppliers. An administrator must update its shared fulfillment status.</p> : null}
             {status === "CANCELLED" && detail.status !== "CANCELLED" ? <p className="font-body-sm text-amber-800 bg-amber-50 border border-amber-200 rounded p-space-sm">Cancelling an order does not restore inventory automatically. Record a stock adjustment if units are returned to stock.</p> : null}
             <Table
               rows={visibleItems(detail)}

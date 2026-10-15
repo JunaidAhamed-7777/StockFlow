@@ -58,6 +58,7 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
     <Modal
       open={open}
       title={`Adjust stock · ${product.sku}`}
+      dismissible={!saving}
       onClose={() => { if (!saving) onClose(); }}
       footer={
         <>
