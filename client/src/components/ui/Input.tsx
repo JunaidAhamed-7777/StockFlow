@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type ReactNode } from "react";
+import { useId, useState, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type ReactNode } from "react";
 
 interface FieldDetails {
   label?: ReactNode;
@@ -14,18 +14,32 @@ function FieldHelp({ id, error, hint }: { id: string } & Pick<FieldDetails, "err
   return null;
 }
 
-export function Input({ label, hint, error, className = "", id, ...props }: InputHTMLAttributes<HTMLInputElement> & FieldDetails) {
+export function Input({ label, hint, error, className = "", id, endAdornment, ...props }: InputHTMLAttributes<HTMLInputElement> & FieldDetails & { endAdornment?: ReactNode }) {
   const generatedId = useId();
   const fieldId = id || generatedId;
   const describedBy = [props["aria-describedby"], (hint || error) && `${fieldId}-help`].filter(Boolean).join(" ") || undefined;
   return (
     <div className="flex flex-col gap-1.5 min-w-0">
       {label ? <label htmlFor={fieldId} className="font-label-sm text-label-sm text-on-surface">{label}</label> : null}
-      <input {...props} id={fieldId} aria-invalid={error ? true : props["aria-invalid"]} aria-describedby={describedBy}
-        className={`h-10 px-3 ${fieldClass} ${error ? "border-error" : ""} ${className}`} />
+      <div className="relative">
+        <input {...props} id={fieldId} aria-invalid={error ? true : props["aria-invalid"]} aria-describedby={describedBy}
+          className={`h-10 px-3 ${fieldClass} ${error ? "border-error" : ""} ${endAdornment ? "pr-16" : ""} ${className}`} />
+        {endAdornment}
+      </div>
       <FieldHelp id={fieldId} error={error} hint={hint} />
     </div>
   );
+}
+
+export function PasswordInput({ id, label = "Password", disabled, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & FieldDetails) {
+  const generatedId = useId();
+  const fieldId = id || generatedId;
+  const [visible, setVisible] = useState(false);
+  const fieldName = typeof label === "string" ? label.toLowerCase() : "password";
+  return <Input {...props} id={fieldId} label={label} disabled={disabled} type={visible ? "text" : "password"}
+    endAdornment={<button type="button" disabled={disabled} aria-label={`${visible ? "Hide" : "Show"} ${fieldName}`} aria-pressed={visible} aria-controls={fieldId}
+      className="absolute right-1 top-1 h-8 min-w-12 px-2 rounded text-xs font-semibold text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface disabled:opacity-50 disabled:cursor-not-allowed"
+      onClick={() => setVisible((current) => !current)}>{visible ? "Hide" : "Show"}</button>} />;
 }
 
 export function Textarea({ label, hint, error, className = "", id, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & FieldDetails) {
@@ -36,7 +50,7 @@ export function Textarea({ label, hint, error, className = "", id, ...props }: T
     <div className="flex flex-col gap-1.5 min-w-0">
       {label ? <label htmlFor={fieldId} className="font-label-sm text-label-sm text-on-surface">{label}</label> : null}
       <textarea {...props} id={fieldId} aria-invalid={error ? true : props["aria-invalid"]} aria-describedby={describedBy}
-        className={`min-h-[104px] px-3 py-2 resize-y ${fieldClass} ${error ? "border-error" : ""} ${className}`} />
+        rows={props.rows || 5} className={`min-h-[136px] px-3 py-2 resize-none ${fieldClass} ${error ? "border-error" : ""} ${className}`} />
       <FieldHelp id={fieldId} error={error} hint={hint} />
     </div>
   );
