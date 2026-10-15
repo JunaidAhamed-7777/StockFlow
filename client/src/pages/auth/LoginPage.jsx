@@ -102,13 +102,13 @@ export function LoginPage() {
                       {apiHealth === "live" ? "LIVE API" : apiHealth === "down" ? "API DOWN" : "CHECKING"}
                     </span>
                   </div>
-                  <p className="font-body-sm text-on-surface-variant">{liveCopy[selectedRole]} Role is assigned by the backend after authentication.</p>
+                  <p className="font-body-sm text-on-surface-variant">{liveCopy[selectedRole]} Your account determines your access.</p>
                 </div>
               </div>
               <div className="relative z-10 flex flex-wrap items-center gap-space-lg pt-space-lg text-on-surface-variant font-label-sm">
-                <span className="flex items-center gap-space-xs"><Icon name="verified_user" className="text-secondary" size={15} />JWT session</span>
-                <span className="flex items-center gap-space-xs"><Icon name="gpp_good" className="text-secondary" size={15} />Role-gated routes</span>
-                <span className="flex items-center gap-space-xs"><Icon name="shield_lock" className="text-secondary" size={15} />PostgreSQL source of truth</span>
+                <span className="flex items-center gap-space-xs"><Icon name="inventory_2" className="text-secondary" size={15} />Stock visibility</span>
+                <span className="flex items-center gap-space-xs"><Icon name="local_shipping" className="text-secondary" size={15} />Order management</span>
+                <span className="flex items-center gap-space-xs"><Icon name="groups" className="text-secondary" size={15} />Focused workspaces</span>
               </div>
             </div>
             <div className="lg:col-span-6 flex flex-col justify-center">
@@ -134,7 +134,7 @@ export function LoginPage() {
                 </div>
                 <div className="relative flex items-center justify-center my-space-xs">
                   <div className="w-full h-px bg-surface-container-highest" />
-                  <span className="absolute bg-surface-container-lowest px-space-md font-caption text-caption uppercase tracking-widest">or sign in with corporate credentials</span>
+                  <span className="absolute bg-surface-container-lowest px-space-md font-caption text-caption uppercase tracking-widest">Your account credentials</span>
                 </div>
                 {location.state?.registered ? <p role="status" className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-space-md">Account created. Sign in with your new credentials.</p> : null}
                 <form className="flex flex-col gap-space-lg" onSubmit={onSubmit} aria-busy={saving}>
