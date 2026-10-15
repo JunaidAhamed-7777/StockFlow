@@ -1,7 +1,9 @@
 # Controlled local notification migration · issue #16
 
-Status on 16 October 2026: **PENDING live migration**. The guarded attempt
-rejected unsupported runtime settings during preflight. That compatibility check
+Status on 16 October 2026: **PENDING live migration**. Authenticated preflight
+confirmed n8n 2.43.6, regular execution mode, single-main deployment and
+`useWorkflowPublicationService: true`. The guard rejected that asynchronous
+publication mode before workflow writes. Its outbox teardown/activation protocol
 is being investigated. No successful application, post-restart verification or
 new delivery result is claimed in this report.
 
@@ -88,8 +90,8 @@ that the current local runtime accepts the maintenance API contract.
 
 ## Live evidence still required
 
-Resolve the rejected runtime-settings preflight, then record the controlled
-command result, restart readiness and activation checks. Compare the original
+Resolve and test the confirmed publication-service mode, then record the
+controlled command result, restart readiness and activation checks. Compare the original
 and post-migration workflow/credential fingerprints, cooldowns, baselines,
 application collections and native role-agent configuration/cost snapshots.
 Confirm only critical delivery remains enabled for the same confirmed webhook.
