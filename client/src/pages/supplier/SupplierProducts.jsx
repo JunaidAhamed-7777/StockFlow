@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
 import { Pagination } from "../../components/ui/Pagination";
 import { useAuth } from "../../context/AuthContext";
@@ -20,6 +20,8 @@ import { Icon } from "../../components/ui/Icon";
 export function SupplierProducts() {
   const { supplier } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location.pathname + location.search;
   const { filters, setFilters } = useListFilters({ search: "" });
   const [search, setSearch] = useState(filters.search);
   const [products, setProducts] = useState([]);
@@ -68,9 +70,9 @@ export function SupplierProducts() {
       { key: "price", header: "Price", align: "right", render: (row) => formatCurrency(row.price) },
       { key: "quantity", header: "Qty", align: "right" },
       { key: "status", header: "Status", render: (row) => <StatusBadge status={stockStatus(row)} /> },
-      { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`Edit ${row.name}`} onClick={() => navigate(`/supplier/products/${row.id}/edit`)}>Edit</Button> },
+      { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`Edit ${row.name}`} onClick={() => navigate(`/supplier/products/${row.id}/edit`, { state: { returnTo } })}>Edit</Button> },
     ],
-    [navigate]
+    [navigate, returnTo]
   );
 
   return (
@@ -78,7 +80,7 @@ export function SupplierProducts() {
       <PageHeader
         title="Products"
         description="Manage the products and stock supplied by your company."
-        actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")} icon={<Icon name="add" size={16} />}>Create product</Button>}
+        actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new", { state: { returnTo } })} icon={<Icon name="add" size={16} />}>Create product</Button>}
       />
       <Card className="p-space-base">
       <form onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }} className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search your products">
@@ -89,7 +91,7 @@ export function SupplierProducts() {
       {error ? <ErrorState message={error} onRetry={load} /> : null}
       {loading ? <PageSkeleton /> : !error && (
         <Card>
-          <Table rows={pagination.rows} columns={columns} caption="Your products" empty={<EmptyState icon="inventory_2" title="No products found" description="Try another search or create your first product." actionLabel="Create product" onAction={() => navigate("/supplier/products/new")} />} />
+          <Table rows={pagination.rows} columns={columns} caption="Your products" empty={<EmptyState icon="inventory_2" title="No products found" description="Try another search or create your first product." actionLabel="Create product" onAction={() => navigate("/supplier/products/new", { state: { returnTo } })} />} />
           <Pagination {...pagination} onPageChange={pagination.setPage} label="Products" />
         </Card>
       )}

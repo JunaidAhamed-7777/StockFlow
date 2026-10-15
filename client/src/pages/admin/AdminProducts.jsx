@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
 import { Pagination } from "../../components/ui/Pagination";
 import { deleteProduct, listProducts } from "../../services/product.service";
@@ -20,6 +20,8 @@ import { Icon } from "../../components/ui/Icon";
 
 export function AdminProducts() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location.pathname + location.search;
   const { filters, setFilters } = useListFilters({ search: "", category: "", supplier: "", lowStock: "" });
   const [search, setSearch] = useState(filters.search);
   const [category, setCategory] = useState(filters.category);
@@ -85,13 +87,13 @@ export function AdminProducts() {
         header: "",
         render: (row) => (
           <div className="flex justify-end gap-space-xs">
-            <Button variant="outline" aria-label={`Edit ${row.name}`} onClick={() => navigate(`/admin/products/${row.id}/edit`)}>Edit</Button>
+            <Button variant="outline" aria-label={`Edit ${row.name}`} onClick={() => navigate(`/admin/products/${row.id}/edit`, { state: { returnTo } })}>Edit</Button>
             <Button variant="danger" aria-label={`Delete ${row.name}`} onClick={() => { setDeleteError(""); setPendingDelete(row); }}>Delete</Button>
           </div>
         ),
       },
     ],
-    [navigate]
+    [navigate, returnTo]
   );
 
   async function confirmDelete() {
@@ -115,7 +117,7 @@ export function AdminProducts() {
       <PageHeader
         title="Products"
         description="Manage products, supplier ownership, pricing, and stock availability."
-        actions={<Button variant="dark" onClick={() => navigate("/admin/products/new")} icon={<Icon name="add" size={16} />}>Create product</Button>}
+        actions={<Button variant="dark" onClick={() => navigate("/admin/products/new", { state: { returnTo } })} icon={<Icon name="add" size={16} />}>Create product</Button>}
       />
       <Card className="p-space-base">
       <form onSubmit={(event) => { event.preventDefault(); setFilters({ search, category, supplier, lowStock: lowStock ? "1" : "" }); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-center" aria-label="Filter products">
@@ -139,7 +141,7 @@ export function AdminProducts() {
       {error ? <ErrorState message={error} onRetry={load} /> : null}
       {loading ? <PageSkeleton /> : !error && (
         <Card>
-          <Table rows={pagination.rows} columns={columns} caption="Products" empty={<EmptyState icon="inventory_2" title="No products found" description="Adjust filters or create a product." actionLabel="Create product" onAction={() => navigate("/admin/products/new")} />} />
+          <Table rows={pagination.rows} columns={columns} caption="Products" empty={<EmptyState icon="inventory_2" title="No products found" description="Adjust filters or create a product." actionLabel="Create product" onAction={() => navigate("/admin/products/new", { state: { returnTo } })} />} />
           <Pagination {...pagination} onPageChange={pagination.setPage} label="Products" />
         </Card>
       )}

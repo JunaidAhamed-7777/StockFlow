@@ -1,7 +1,10 @@
 import { ProductForm } from "../../components/ProductForm";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
+import { productListReturnTo } from "../../utils/productReturnTo.mjs";
 
 export function AdminProductFormPage() {
   const { id } = useParams();
-  return <ProductForm productId={id} cancelTo="/admin/products" successTo="/admin/products" />;
+  const location = useLocation();
+  const returnTo = productListReturnTo(location.state?.returnTo, "/admin/products");
+  return <ProductForm productId={id} cancelTo={returnTo} successTo={returnTo} />;
 }
