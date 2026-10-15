@@ -31,9 +31,13 @@ test('database identity includes saved container ID, volume, loopback binding, a
 });
 
 test('n8n reuse verifies official image, persistent storage, port, and saved identity', () => {
-  const n8n = { Id: 'user-n8n', Config: { Image: 'docker.n8n.io/n8nio/n8n:2.43.6' }, HostConfig: { PortBindings: { '5678/tcp': [{ HostIp: '', HostPort: '5678' }] } }, Mounts: [{ Destination: '/home/node/.n8n', Name: 'n8n_data' }] };
+  const n8n = { Id: 'user-n8n', Config: { Image: 'docker.n8n.io/n8nio/n8n:2.43.6' }, HostConfig: { PortBindings: { '5678/tcp': [{ HostIp: '', HostPort: '5678' }] } }, Mounts: [{ Destination: '/home/node/.n8n', Type: 'volume', Name: 'n8n_data', Source: '/volumes/n8n_data' }] };
   assert.equal(validateN8nContainer(n8n), 'user-n8n');
   assert.throws(() => validateN8nContainer(n8n, 'different-container'));
   assert.throws(() => validateN8nContainer({ ...n8n, Config: { Image: 'unrelated/server:latest' } }));
   assert.throws(() => validateN8nContainer({ ...n8n, Mounts: [] }));
+  for (const mount of [{ Type: 'tmpfs', Source: 'memory' }, { Type: 'volume', Name: '' }, { Type: 'bind', Source: '' }, {}]) {
+    assert.throws(() => validateN8nContainer({ ...n8n, Mounts: [{ Destination: '/home/node/.n8n', ...mount }] }));
+  }
+  assert.equal(validateN8nContainer({ ...n8n, Mounts: [{ Destination: '/home/node/.n8n', Type: 'bind', Source: '/private/n8n-data' }] }), 'user-n8n');
 });
