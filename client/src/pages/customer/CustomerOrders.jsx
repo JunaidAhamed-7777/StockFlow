@@ -35,15 +35,15 @@ export function CustomerOrders() {
   }, []);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
     <>
       <PageHeader
         breadcrumb={<><span>Fulfillment</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Dispatch portal</span></>}
-        title="Orders & Dispatch Tracking"
-        description="Your orders from GET /api/orders."
+        title="Your orders"
+        description="Review your purchase history and the latest fulfillment status."
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
       <Card>
         <Table
           rows={orders}
@@ -55,7 +55,7 @@ export function CustomerOrders() {
             { key: "items", header: "Lines", align: "right", render: (row) => row.orderItems?.length || 0 },
             { key: "totalAmount", header: "Total", align: "right", render: (row) => formatCurrency(row.totalAmount) },
             { key: "status", header: "Status", render: (row) => <OrderStatusBadge status={row.status} /> },
-            { key: "actions", header: "", render: (row) => <Button variant="outline" onClick={(event) => { event.stopPropagation(); navigate(`/customer/orders/${row.id}`); }}>Track</Button> },
+            { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View order ${row.id}`} onClick={(event) => { event.stopPropagation(); navigate(`/customer/orders/${row.id}`); }}>View order</Button> },
           ]}
         />
       </Card>

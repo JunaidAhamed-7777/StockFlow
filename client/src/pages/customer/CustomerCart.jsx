@@ -18,6 +18,11 @@ export function CustomerCart() {
   const [saving, setSaving] = useState(false);
 
   async function checkout() {
+    if (saving || items.length === 0) return;
+    if (items.some((item) => !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > item.stock)) {
+      setError("Each quantity must be a whole number within the available stock. Update your cart before placing the order.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -35,8 +40,9 @@ export function CustomerCart() {
     <>
       <PageHeader
         breadcrumb={<><span>Procurement</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Wholesale checkout</span></>}
-        title="Cart & Dispatch Checkout"
-        description="Checkout submits POST /api/orders with the current cart lines. Success is only shown after the API accepts the order."
+        title="Your cart"
+        description="Review quantities and prices before placing your order. Stock and prices are confirmed when you submit."
+        actions={<Button variant="outline" onClick={() => navigate("/customer/products")}>Continue shopping</Button>}
       />
       {error ? <ErrorState message={error} /> : null}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
@@ -56,21 +62,25 @@ export function CustomerCart() {
                   <input
                     type="number"
                     min="1"
+                    step="1"
+                    max={row.stock}
+                    aria-label={`Quantity for ${row.name}`}
+                    disabled={saving}
                     value={row.quantity}
                     onChange={(e) => updateQuantity(row.productId, Number(e.target.value))}
-                    className="w-20 h-8 px-space-xs bg-surface-container-low rounded font-mono-data"
+                    className="w-20 h-9 px-space-xs border border-slate-300 rounded font-mono-data focus:ring-2 focus:ring-blue-500"
                   />
                 ),
               },
               { key: "line", header: "Line", align: "right", render: (row) => formatCurrency(row.price * row.quantity) },
-              { key: "actions", header: "", render: (row) => <Button variant="danger" onClick={() => removeItem(row.productId)}>Remove</Button> },
+              { key: "actions", header: "", render: (row) => <Button variant="danger" disabled={saving} aria-label={`Remove ${row.name} from cart`} onClick={() => removeItem(row.productId)}>Remove</Button> },
             ]}
           />
         </Card>
         <Card className="lg:col-span-4 p-space-xl space-y-space-md h-fit">
           <h2 className="font-headline-sm">Order summary</h2>
           <div className="flex justify-between font-body-sm"><span>Subtotal</span><span className="font-mono-data">{formatCurrency(subtotal)}</span></div>
-          <p className="font-caption text-on-surface-variant">Tax and freight are not calculated by the backend. The submitted total is unit price × quantity.</p>
+          <p className="font-caption text-on-surface-variant">Subtotal includes product prices only. Tax and shipping are not calculated. Final product prices and availability are checked when you place your order.</p>
           <Button className="w-full" disabled={items.length === 0} loading={saving} onClick={checkout}>Place order</Button>
         </Card>
       </div>
