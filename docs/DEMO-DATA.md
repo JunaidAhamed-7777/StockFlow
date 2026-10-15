@@ -17,6 +17,19 @@ The first command previews the counts without writing data. The second creates m
 
 Passwords are individually generated from 24 random bytes. They are saved in ignored `.local/demo-accounts.json` before account creation so an interrupted run can resume. This file is for local login and must not be committed, published, or sent to n8n. The script logs counts and the file location, never passwords or tokens. Keep the credentials file if the corresponding database is retained; deleting it prevents the script from authenticating existing demo accounts.
 
+Credential files are replaced atomically rather than truncated in place. Apply
+runs are serialized by `.local/demo-seed.lock` before reading retained account
+metadata. A concurrent run stops without replacing the owner's lock. If a process
+was interrupted, inspect the PID in that private lock and verify no seed process
+is still running before removing only the stale lock; retain the account file.
+The next run can then resume using the passwords saved before registration.
+
+The supplier bootstrap requires an initialized runtime marker and verifies the
+saved Docker container identity, image, volume, loopback binding and credentials
+before opening Prisma. HTTP redirects are refused, including redirects from a
+loopback URL. Remote response/error bodies are not printed. See the
+[repeatability and browser verification report](QA-DEMO-DATA.md).
+
 The API supports user registration and product creation but has no supplier-profile creation endpoint. The optional supplier bootstrap therefore writes only missing supplier records through Prisma against the explicitly marked isolated Docker runtime in `.local/runtime.json`. It rejects any other container name, database, hostname, or port. It verifies each account is the matching fictional supplier and verifies the API administrator identity against that database. It does not change the Prisma schema, server source, authentication, or endpoints.
 
 Existing matching SKUs are skipped, including their quantities and prices. Existing account passwords and roles are never reset. A repeated successful run creates zero additional accounts or products. New products begin with ample stock; seeding does not create orders or trigger email. Opening quantities are supplied through the current product API, which does not create initial stock transaction history.
