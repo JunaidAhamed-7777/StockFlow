@@ -26,6 +26,7 @@ test('browser bridge keeps proxy queries, isolates failures and refuses unrelate
     assert.match(html, /Isolated test build/);
     assert.doesNotMatch(html, /fonts.example/);
     assert.match(page.headers.get('content-security-policy'), /connect-src 'self'/);
+    assert.equal((await fetch(bridge.url)).status, 200);
     const proxied = await fetch(`${bridge.url}/api/products?page=2&pageSize=12&search=last%20SKU`);
     assert.equal((await proxied.json()).path, '/api/products?page=2&pageSize=12&search=last%20SKU');
     assert.equal((await fetch(`${bridge.url}/api/ai/run`)).status, 404);
@@ -40,6 +41,35 @@ test('browser bridge keeps proxy queries, isolates failures and refuses unrelate
     await fetch(`${bridge.url}/__qa/product-availability?fail=false`, { method: 'POST' });
     assert.equal((await fetch(`${bridge.url}/api/products?page=1`)).status, 200);
     assert.equal(bridge.report.failuresInjected, 1);
+  } finally {
+    if (bridge) { bridge.server.closeAllConnections(); await new Promise((resolve) => bridge.server.close(resolve)); }
+    upstream.closeAllConnections(); await new Promise((resolve) => upstream.close(resolve));
+    const resolved = path.resolve(directory);
+    assert.ok(resolved.startsWith(`${path.resolve(tmpdir())}${path.sep}`) && path.basename(resolved).startsWith('stockflow-bridge-test-'));
+    await rm(resolved, { recursive: true, force: true });
+  }
+});
+
+test('disconnecting a browser page cancels the held isolated upstream read', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'stockflow-bridge-test-'));
+  let announceStarted; let announceClosed;
+  const started = new Promise((resolve) => { announceStarted = resolve; });
+  const closed = new Promise((resolve) => { announceClosed = resolve; });
+  const upstream = http.createServer((_req, res) => { res.writeHead(200); res.write('{'); res.once('close', announceClosed); announceStarted(); });
+  let bridge;
+  try {
+    await writeFile(path.join(directory, 'index.html'), 'QA');
+    await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+    bridge = await createBrowserBridge({ base: `http://127.0.0.1:${upstream.address().port}/api`, distRoot: directory });
+    const controller = new AbortController();
+    const pending = fetch(`${bridge.url}/api/products?page=2`, { signal: controller.signal });
+    const rejected = assert.rejects(pending, /abort/i);
+    await started;
+    controller.abort();
+    await rejected;
+    let timer;
+    try { await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Upstream remained open after page cancellation.')), 3000); })]); }
+    finally { clearTimeout(timer); }
   } finally {
     if (bridge) { bridge.server.closeAllConnections(); await new Promise((resolve) => bridge.server.close(resolve)); }
     upstream.closeAllConnections(); await new Promise((resolve) => upstream.close(resolve));

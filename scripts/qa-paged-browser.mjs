@@ -16,7 +16,7 @@ export function browserApiTarget(base) {
   return target;
 }
 
-export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'client/dist') }) {
+export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'client/dist'), signal }) {
   const api = browserApiTarget(base);
   const root = await realpath(distRoot);
   const report = { isolated: true, requests: {}, responseBytes: 0, failuresInjected: 0 };
@@ -40,11 +40,14 @@ export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'cl
         // AI/model/automation routes are deliberately absent from this bridge.
         if (!/^\/api\/(?:health|auth\/(?:login|me)|users\/me|products(?:\/\d+)?|orders(?:\/\d+(?:\/status)?)?|discovery\/(?:categories|suppliers(?:\/\d+)?)|dashboard|stock\/(?:low-stock|transactions|adjust))$/.test(url.pathname)) return send(404, { message: 'No isolated browser route.' });
         if (failProducts && url.pathname === '/api/products') { report.failuresInjected++; return send(503, { message: 'Injected isolated QA product outage.' }); }
+        const disconnected = new AbortController();
+        req.once('aborted', () => disconnected.abort());
+        res.once('close', () => { if (!res.writableEnded) disconnected.abort(); });
         let bytes = 0;
         const chunks = [];
         for await (const chunk of req) { bytes += chunk.length; if (bytes > 32_768) return send(413, { message: 'QA request too large.' }); chunks.push(chunk); }
         const target = new URL(`${url.pathname}${url.search}`, api.origin);
-        const response = await fetch(target, { method: req.method, redirect: 'error', signal: AbortSignal.timeout(15_000),
+        const response = await fetch(target, { method: req.method, redirect: 'error', signal: AbortSignal.any([AbortSignal.timeout(15_000), disconnected.signal, ...(signal ? [signal] : [])]),
           headers: { ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}), ...(req.headers['content-type'] ? { 'content-type': req.headers['content-type'] } : {}) },
           body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) });
         const body = Buffer.from(await response.arrayBuffer());
@@ -54,13 +57,13 @@ export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'cl
       }
       if (!['GET', 'HEAD'].includes(req.method)) return send(405, { message: 'Read-only static assets.' });
       let target = path.resolve(root, `.${decodeURIComponent(url.pathname)}`);
-      if (!target.startsWith(`${root}${path.sep}`)) return send(400, { message: 'Invalid asset path.' });
+      if (target !== root && !target.startsWith(`${root}${path.sep}`)) return send(400, { message: 'Invalid asset path.' });
       try { if (!(await stat(target)).isFile()) target = path.join(root, 'index.html'); }
       catch { if (path.extname(target)) return send(404, { message: 'Asset not found.' }); target = path.join(root, 'index.html'); }
       if (!(await realpath(target)).startsWith(`${root}${path.sep}`)) return send(403, { message: 'Asset outside build.' });
       const body = await readFile(target);
       return send(200, path.extname(target) === '.html' ? body.toString().replace(/<link\b[^>]*href=["']https?:\/\/[^>]*>/gi, '') : body, types[path.extname(target)] || 'application/octet-stream');
-    } catch { return send(502, { message: 'The isolated QA service is unavailable.' }); }
+    } catch { if (!res.destroyed) return send(502, { message: 'The isolated QA service is unavailable.' }); }
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   return { server, url: `http://127.0.0.1:${server.address().port}`, report };
@@ -69,9 +72,10 @@ export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'cl
 async function main() {
   if (process.argv.length !== 3 || process.argv[2] !== '--run-isolated') throw new Error('Usage: node scripts/qa-paged-browser.mjs --run-isolated');
   await runIsolated({ evidencePath: path.join(ROOT, 'artifacts/qa/paged-api.json'), onReady: async ({ base, accounts, signal }) => {
-    const bridge = await createBrowserBridge({ base });
-    const directory = await mkdtemp(path.join(tmpdir(), 'stockflow-paged-browser-'));
+    const bridge = await createBrowserBridge({ base, signal });
+    let directory;
     try {
+      directory = await mkdtemp(path.join(tmpdir(), 'stockflow-paged-browser-'));
       const privateLoginFile = path.join(directory, 'accounts.json');
       await writeFile(privateLoginFile, JSON.stringify(accounts), { mode: 0o600 });
       console.log(JSON.stringify({ browserUrl: bridge.url, privateLoginFile, isolated: true, stop: 'Ctrl+C cleans up only this disposable run.' }));
@@ -79,9 +83,11 @@ async function main() {
     } finally {
       bridge.server.closeAllConnections();
       await new Promise((resolve) => bridge.server.close(resolve));
-      const resolved = path.resolve(directory);
-      if (!resolved.startsWith(`${path.resolve(tmpdir())}${path.sep}`) || !path.basename(resolved).startsWith('stockflow-paged-browser-')) throw new Error('Unexpected private QA directory.');
-      await rm(resolved, { recursive: true, force: true });
+      if (directory) {
+        const resolved = path.resolve(directory);
+        if (!resolved.startsWith(`${path.resolve(tmpdir())}${path.sep}`) || !path.basename(resolved).startsWith('stockflow-paged-browser-')) throw new Error('Unexpected private QA directory.');
+        await rm(resolved, { recursive: true, force: true });
+      }
     }
   } });
 }
