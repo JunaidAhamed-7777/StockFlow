@@ -78,13 +78,6 @@ export function ProfilePage() {
     <>
       <UnsavedChangesGuard dirty={JSON.stringify(form) !== JSON.stringify(initialForm)} busy={loading || saving} />
       <PageHeader
-        breadcrumb={
-          <>
-            <span>Account</span>
-            <span className="text-outline-variant">/</span>
-            <span className="text-secondary font-medium">Profile</span>
-          </>
-        }
         title="Profile"
         description="Update your name and email address."
       />

@@ -158,13 +158,7 @@ export function ProductForm({ productId, cancelTo, successTo }) {
     <>
       <UnsavedChangesGuard dirty={JSON.stringify(form) !== JSON.stringify(initialForm)} busy={loading || saving} />
       <PageHeader
-        breadcrumb={
-          <>
-            <span>Products</span>
-            <span className="text-outline-variant">/</span>
-            <span className="text-secondary font-medium">{isEdit ? "Edit product" : "New product"}</span>
-          </>
-        }
+        breadcrumbs={[{ label: "Products", to: cancelTo }, { label: isEdit ? "Edit product" : "Create product" }]}
         title={isEdit ? "Edit product" : "Create product"}
         description="Keep product information, pricing, and replenishment thresholds up to date."
         actions={

@@ -67,7 +67,7 @@ export function CustomerProductDetail() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Catalog</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium font-mono-data">{product.sku}</span></>}
+        breadcrumbs={[{ label: "Products", to: "/customer/products" }, { label: product.name }]}
         title={product.name}
         badge={<StatusBadge status={status} />}
         actions={<Button variant="outline" onClick={() => navigate("/customer/products")}>Back to catalog</Button>}

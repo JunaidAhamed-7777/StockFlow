@@ -76,7 +76,7 @@ export function CustomerCart() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Catalog</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Cart</span></>}
+        breadcrumbs={[{ label: "Products", to: "/customer/products" }, { label: "Cart" }]}
         title="Your cart"
         description="Review quantities and prices before placing your order. Stock and prices are confirmed when you submit."
         actions={<Button variant="outline" onClick={() => navigate("/customer/products")}>Continue shopping</Button>}

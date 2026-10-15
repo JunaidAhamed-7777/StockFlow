@@ -89,7 +89,6 @@ export function CustomerProducts() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Procurement</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Catalog</span></>}
         title="Product catalog"
         description="Find the supplies you need, compare availability, and build your next order."
         actions={<Button variant="outline" onClick={() => navigate("/customer/cart")} icon={<Icon name="shopping_cart" size={18} />}>Cart ({count})</Button>}
