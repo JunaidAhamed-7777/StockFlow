@@ -14,11 +14,12 @@ test("complete datasets restore a URL page and clamp after filtering or deletion
   assert.equal(deleted.rows.length, 20);
 });
 
-test("order details return to the customer's filtered list and reject other destinations", () => {
-  const path = "/customer/orders";
-  const value = `${path}?status=SHIPPED&page=2`;
-  assert.equal(listReturnTo(value, path), value);
-  for (const destination of ["https://evil.example/customer/orders", "//evil.example/customer/orders", "/admin/orders", "/customer/orders/1", `${value}#hidden`, null]) assert.equal(listReturnTo(destination, path), path);
+test("customer details return to their filtered owning list and reject other destinations", () => {
+  for (const path of ["/customer/orders", "/customer/products"]) {
+    const value = `${path}?search=mouse&page=2`;
+    assert.equal(listReturnTo(value, path), value);
+    for (const destination of [`https://evil.example${path}`, `//evil.example${path}`, "/admin/orders", `${path}/1`, `${value}#hidden`, null]) assert.equal(listReturnTo(destination, path), path);
+  }
 });
 
 test("invalid pages and empty lists stay on a usable first page without mutating records", () => {

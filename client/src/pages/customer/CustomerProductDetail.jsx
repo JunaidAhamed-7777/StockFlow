@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { listReturnTo } from "../../utils/listState.mjs";
 import { getProduct } from "../../services/product.service";
 import { useCart } from "../../context/CartContext";
 import { getErrorMessage } from "../../utils/errors";
@@ -16,6 +17,8 @@ import { ProductImage } from "../../components/ProductImage";
 export function CustomerProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = listReturnTo(location.state?.returnTo, "/customer/products");
   const { addItem } = useCart();
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -67,10 +70,10 @@ export function CustomerProductDetail() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: "Products", to: "/customer/products" }, { label: product.name }]}
+        breadcrumbs={[{ label: "Products", to: returnTo }, { label: product.name }]}
         title={product.name}
         badge={<StatusBadge status={status} />}
-        actions={<Button variant="outline" onClick={() => navigate("/customer/products")}>Back to catalog</Button>}
+        actions={<Button variant="outline" onClick={() => navigate(returnTo)}>Back to catalog</Button>}
       />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
         <Card className="lg:col-span-8 overflow-hidden">

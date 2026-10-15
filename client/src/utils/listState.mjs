@@ -10,7 +10,7 @@ export function paginateRows(rows, requestedPage, requestedSize = 20) {
 
 /** Only known owning lists may restore state after a detail or form route. */
 export function listReturnTo(value, listPath) {
-  if (!["/admin/products", "/supplier/products", "/customer/orders"].includes(listPath)) throw new Error("Unknown list destination.");
+  if (!["/admin/products", "/supplier/products", "/customer/products", "/customer/orders"].includes(listPath)) throw new Error("Unknown list destination.");
   if (typeof value !== "string" || (value !== listPath && !value.startsWith(`${listPath}?`)) || /[\\#\u0000-\u0020\u007f]/.test(value)) return listPath;
   try {
     const parsed = new URL(value, "http://stockflow.local");
