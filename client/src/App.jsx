@@ -4,6 +4,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RoleRedirect } from "./components/RoleRedirect";
 import { Loading } from "./components/ui/Loading";
+import { useAuth } from "./context/AuthContext";
 
 const page = (loader, name) => lazy(async () => ({ default: (await loader())[name] }));
 const LoginPage = page(() => import("./pages/auth/LoginPage"), "LoginPage");
@@ -34,16 +35,22 @@ const CustomerProfile = page(() => import("./pages/customer/CustomerProfile"), "
 
 function RouteMetadata() {
   const { pathname } = useLocation();
+  const { isAuthenticated, role } = useAuth();
   useEffect(() => {
-    const segment = pathname.split("/")[2] || pathname.split("/")[1];
-    const labels = { login: "Sign in", register: "Create account", dashboard: "Dashboard", products: "Products", inventory: "Stock control", orders: "Orders", suppliers: "Suppliers", customers: "Customers", "stock-transactions": "Stock transactions", ai: "AI & Automation", profile: "Profile", cart: "Cart", stock: "Stock management" };
-    document.title = `${labels[segment] || "Workspace"} · StockFlow`;
-  }, [pathname]);
+    const parts = pathname.split("/").filter(Boolean);
+    const segment = parts[1] || parts[0];
+    const labels = { login: "Sign in", register: "Create account", dashboard: "Dashboard", products: "Products", inventory: "Inventory", orders: "Orders", suppliers: "Suppliers", customers: "Customers", "stock-transactions": "Stock transactions", ai: "Automations", profile: "Profile", cart: "Cart", stock: "Stock" };
+    let title = labels[segment] || (pathname === "/" ? "Workspace" : "Page unavailable");
+    if (segment === "products" && parts[2]) title = parts[2] === "new" ? "Create product" : parts[3] === "edit" ? "Edit product" : "Product details";
+    if (segment === "orders" && parts[2]) title = "Order details";
+    if (isAuthenticated && ["admin", "supplier", "customer"].includes(parts[0]) && parts[0].toUpperCase() !== role) title = "Access denied";
+    document.title = `${title} · StockFlow`;
+  }, [pathname, isAuthenticated, role]);
   return null;
 }
 
 function NotFound() {
-  return <main className="max-w-xl mx-auto px-6 py-20"><p className="text-secondary font-semibold mb-3">404 · Page unavailable</p><h1 className="font-headline-lg text-headline-lg">We couldn’t find this page</h1><p className="mt-3 mb-6 text-on-surface-variant">The link may have changed. Return to your workspace to continue.</p><Link to="/" className="inline-flex min-h-10 items-center px-4 py-2 rounded-lg bg-secondary text-white font-semibold">Return to workspace</Link></main>;
+  return <main className="max-w-xl mx-auto px-6 py-20"><h1 className="font-headline-lg text-headline-lg">We couldn’t find this page</h1><p className="mt-3 mb-6 text-on-surface-variant">The link may have changed. Return to your workspace to continue.</p><Link to="/" className="inline-flex min-h-11 items-center px-4 py-2 rounded-lg bg-secondary text-white font-semibold">Return to workspace</Link></main>;
 }
 
 export default function App() {
