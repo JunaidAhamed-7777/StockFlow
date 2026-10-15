@@ -92,3 +92,7 @@ Before replacing a stored webhook with a different one, **unpublish every workfl
 When the destination changes and its workflow users are unpublished, the helper restarts n8n **before importing the new credential** to flush old in-memory schedules. Save the new URL in the private input file, import it, and confirm a new connection test before re-enabling critical alerts. The previous webhook's test fingerprint cannot authorize the new destination. Review the changed test draft in n8n if the helper refuses to replace it.
 
 See the [Discord setup guide](./DISCORD.md), [notification-routing contract](./MAIL-ROUTING.md), and [n8n CLI reference](https://docs.n8n.io/hosting/cli-commands/).
+
+The [notification QA report](../docs/QA-NOTIFICATIONS.md) records isolated rule,
+preview and update-state checks, reproduced fixes and the distinction between
+reviewed source templates and the current live installation.
