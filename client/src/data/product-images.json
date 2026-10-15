@@ -1,0 +1,310 @@
+{
+  "ELEC-MOUSE-001": {
+    "src": "https://images.unsplash.com/photo-1770479592099-464241a3ad3a?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative black ergonomic computer mouse on a white desk",
+    "creditName": "Krunal Lakhatariya",
+    "creditUrl": "https://unsplash.com/photos/a-black-computer-mouse-on-a-white-desk--0Wqx50_W7g",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "ELEC-KEYB-002": {
+    "src": "https://images.unsplash.com/photo-1612383401597-cdfb8bdfa0d9?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative black keyboard with illuminated keys",
+    "creditName": "Christian Lue",
+    "creditUrl": "https://unsplash.com/photos/black-computer-keyboard-on-black-surface-oj7Z1ucRxcs",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "ELEC-HUB-003": {
+    "src": "https://images.pexels.com/photos/7742586/pexels-photo-7742586.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative USB hub connected to a laptop",
+    "creditName": "Rann Vijay",
+    "creditUrl": "https://www.pexels.com/photo/a-usb-hub-plugged-into-a-laptop-7742586/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "OFF-NOTE-004": {
+    "src": "https://images.unsplash.com/photo-1477125804055-781b73bcd980?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative open ruled notebook",
+    "creditName": "Dana Marin (Amsterdamian)",
+    "creditUrl": "https://unsplash.com/photos/notebook-opened-IThpmszqH7Y",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-MOUSE-01": {
+    "src": "https://images.unsplash.com/photo-1770479592099-464241a3ad3a?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative black ergonomic computer mouse on a white desk",
+    "creditName": "Krunal Lakhatariya",
+    "creditUrl": "https://unsplash.com/photos/a-black-computer-mouse-on-a-white-desk--0Wqx50_W7g",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-MOUSE-02": {
+    "src": "https://images.unsplash.com/photo-1770479592099-464241a3ad3a?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative black ergonomic computer mouse on a white desk",
+    "creditName": "Krunal Lakhatariya",
+    "creditUrl": "https://unsplash.com/photos/a-black-computer-mouse-on-a-white-desk--0Wqx50_W7g",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-MOUSE-03": {
+    "src": "https://images.pexels.com/photos/13870514/pexels-photo-13870514.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black computer mouse with an illuminated scroll wheel",
+    "creditName": "Matheus Bertelli",
+    "creditUrl": "https://www.pexels.com/photo/close-up-of-a-computer-mouse-13870514/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-MOUSE-04": {
+    "src": "https://images.unsplash.com/photo-1770479592099-464241a3ad3a?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative black ergonomic computer mouse on a white desk",
+    "creditName": "Krunal Lakhatariya",
+    "creditUrl": "https://unsplash.com/photos/a-black-computer-mouse-on-a-white-desk--0Wqx50_W7g",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-KEY-01": {
+    "src": "https://images.unsplash.com/photo-1612383401597-cdfb8bdfa0d9?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative black keyboard with illuminated keys",
+    "creditName": "Christian Lue",
+    "creditUrl": "https://unsplash.com/photos/black-computer-keyboard-on-black-surface-oj7Z1ucRxcs",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-KEY-02": {
+    "src": "https://images.pexels.com/photos/7265920/pexels-photo-7265920.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black wireless keyboard on an office desk",
+    "creditName": "Lucian Petrean",
+    "creditUrl": "https://www.pexels.com/photo/black-computer-keyboard-on-the-table-7265920/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-KEY-03": {
+    "src": "https://images.pexels.com/photos/7265920/pexels-photo-7265920.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black wireless keyboard on an office desk",
+    "creditName": "Lucian Petrean",
+    "creditUrl": "https://www.pexels.com/photo/black-computer-keyboard-on-the-table-7265920/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-KEY-04": {
+    "src": "https://images.unsplash.com/photo-1612383401597-cdfb8bdfa0d9?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative black keyboard with illuminated keys",
+    "creditName": "Christian Lue",
+    "creditUrl": "https://unsplash.com/photos/black-computer-keyboard-on-black-surface-oj7Z1ucRxcs",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-AUDIO-01": {
+    "src": "https://images.pexels.com/photos/3394652/pexels-photo-3394652.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white over-ear headphones",
+    "creditName": "Sound On",
+    "creditUrl": "https://www.pexels.com/photo/white-headphones-3394652/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-AUDIO-02": {
+    "src": "https://images.pexels.com/photos/30428610/pexels-photo-30428610.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black studio headphones against a white background",
+    "creditName": "Vladislav Anchuk",
+    "creditUrl": "https://www.pexels.com/photo/black-studio-headphones-on-white-background-30428610/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-AUDIO-03": {
+    "src": "https://images.pexels.com/photos/3394652/pexels-photo-3394652.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white over-ear headphones",
+    "creditName": "Sound On",
+    "creditUrl": "https://www.pexels.com/photo/white-headphones-3394652/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-AUDIO-04": {
+    "src": "https://images.pexels.com/photos/30428610/pexels-photo-30428610.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black studio headphones against a white background",
+    "creditName": "Vladislav Anchuk",
+    "creditUrl": "https://www.pexels.com/photo/black-studio-headphones-on-white-background-30428610/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-SPK-01": {
+    "src": "https://images.pexels.com/photos/7772558/pexels-photo-7772558.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative compact portable speaker against a white background",
+    "creditName": "Caleb Oquendo",
+    "creditUrl": "https://www.pexels.com/photo/speaker-in-white-background-7772558/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-SPK-02": {
+    "src": "https://images.pexels.com/photos/7772558/pexels-photo-7772558.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative compact portable speaker against a white background",
+    "creditName": "Caleb Oquendo",
+    "creditUrl": "https://www.pexels.com/photo/speaker-in-white-background-7772558/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-SPK-03": {
+    "src": "https://images.pexels.com/photos/7772558/pexels-photo-7772558.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative compact portable speaker against a white background",
+    "creditName": "Caleb Oquendo",
+    "creditUrl": "https://www.pexels.com/photo/speaker-in-white-background-7772558/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-SPK-04": {
+    "src": "https://images.pexels.com/photos/7772558/pexels-photo-7772558.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative compact portable speaker against a white background",
+    "creditName": "Caleb Oquendo",
+    "creditUrl": "https://www.pexels.com/photo/speaker-in-white-background-7772558/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-CABLE-01": {
+    "src": "https://images.pexels.com/photos/914915/pexels-photo-914915.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white USB cable connector",
+    "creditName": "Matthias Zomer",
+    "creditUrl": "https://www.pexels.com/photo/close-up-photo-of-white-usb-cable-914915/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-CABLE-02": {
+    "src": "https://images.pexels.com/photos/12997240/pexels-photo-12997240.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white charging cable against a white background",
+    "creditName": "Srattha Nualsate",
+    "creditUrl": "https://www.pexels.com/photo/white-usb-cable-in-close-up-photography-12997240/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-CABLE-03": {
+    "src": "https://images.pexels.com/photos/914915/pexels-photo-914915.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white USB cable connector",
+    "creditName": "Matthias Zomer",
+    "creditUrl": "https://www.pexels.com/photo/close-up-photo-of-white-usb-cable-914915/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-HUB-01": {
+    "src": "https://images.pexels.com/photos/7742586/pexels-photo-7742586.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative USB hub connected to a laptop",
+    "creditName": "Rann Vijay",
+    "creditUrl": "https://www.pexels.com/photo/a-usb-hub-plugged-into-a-laptop-7742586/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-NOTE-01": {
+    "src": "https://images.unsplash.com/photo-1477125804055-781b73bcd980?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative open ruled notebook",
+    "creditName": "Dana Marin (Amsterdamian)",
+    "creditUrl": "https://unsplash.com/photos/notebook-opened-IThpmszqH7Y",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-NOTE-02": {
+    "src": "https://images.pexels.com/photos/31480649/pexels-photo-31480649.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black notebook and pen on a white background",
+    "creditName": "Adrian Regeci",
+    "creditUrl": "https://www.pexels.com/photo/minimalist-black-notebook-and-pen-on-white-background-31480649/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-NOTE-03": {
+    "src": "https://images.unsplash.com/photo-1477125804055-781b73bcd980?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative open ruled notebook",
+    "creditName": "Dana Marin (Amsterdamian)",
+    "creditUrl": "https://unsplash.com/photos/notebook-opened-IThpmszqH7Y",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-NOTE-04": {
+    "src": "https://images.pexels.com/photos/31480649/pexels-photo-31480649.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black notebook and pen on a white background",
+    "creditName": "Adrian Regeci",
+    "creditUrl": "https://www.pexels.com/photo/minimalist-black-notebook-and-pen-on-white-background-31480649/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-PENCIL-01": {
+    "src": "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative row of colored wooden pencils",
+    "creditName": "Jess Bailey",
+    "creditUrl": "https://unsplash.com/photos/colored-pencil-lined-up-on-top-of-white-surface-l3N9Q27zULw",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-PENCIL-02": {
+    "src": "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative row of colored wooden pencils",
+    "creditName": "Jess Bailey",
+    "creditUrl": "https://unsplash.com/photos/colored-pencil-lined-up-on-top-of-white-surface-l3N9Q27zULw",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-PENCIL-03": {
+    "src": "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative row of colored wooden pencils",
+    "creditName": "Jess Bailey",
+    "creditUrl": "https://unsplash.com/photos/colored-pencil-lined-up-on-top-of-white-surface-l3N9Q27zULw",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-PENCIL-04": {
+    "src": "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=800&q=80",
+    "alt": "Illustrative row of colored wooden pencils",
+    "creditName": "Jess Bailey",
+    "creditUrl": "https://unsplash.com/photos/colored-pencil-lined-up-on-top-of-white-surface-l3N9Q27zULw",
+    "licenseUrl": "https://unsplash.com/license"
+  },
+  "DEMO-PEN-01": {
+    "src": "https://images.pexels.com/photos/5594344/pexels-photo-5594344.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black pen on a geometric stand",
+    "creditName": "Mike Murray",
+    "creditUrl": "https://www.pexels.com/photo/black-pen-in-close-up-shot-5594344/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-PEN-02": {
+    "src": "https://images.pexels.com/photos/5594344/pexels-photo-5594344.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black pen on a geometric stand",
+    "creditName": "Mike Murray",
+    "creditUrl": "https://www.pexels.com/photo/black-pen-in-close-up-shot-5594344/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-PEN-03": {
+    "src": "https://images.pexels.com/photos/5594344/pexels-photo-5594344.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black pen on a geometric stand",
+    "creditName": "Mike Murray",
+    "creditUrl": "https://www.pexels.com/photo/black-pen-in-close-up-shot-5594344/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-PEN-04": {
+    "src": "https://images.pexels.com/photos/5594344/pexels-photo-5594344.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative black pen on a geometric stand",
+    "creditName": "Mike Murray",
+    "creditUrl": "https://www.pexels.com/photo/black-pen-in-close-up-shot-5594344/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-MUG-01": {
+    "src": "https://images.pexels.com/photos/12122888/pexels-photo-12122888.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white ceramic mug on a wooden table",
+    "creditName": "Irina P",
+    "creditUrl": "https://www.pexels.com/photo/white-ceramic-mug-in-close-up-photography-12122888/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-MUG-02": {
+    "src": "https://images.pexels.com/photos/12122888/pexels-photo-12122888.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white ceramic mug on a wooden table",
+    "creditName": "Irina P",
+    "creditUrl": "https://www.pexels.com/photo/white-ceramic-mug-in-close-up-photography-12122888/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-MUG-03": {
+    "src": "https://images.pexels.com/photos/12122888/pexels-photo-12122888.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white ceramic mug on a wooden table",
+    "creditName": "Irina P",
+    "creditUrl": "https://www.pexels.com/photo/white-ceramic-mug-in-close-up-photography-12122888/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-MUG-04": {
+    "src": "https://images.pexels.com/photos/12122888/pexels-photo-12122888.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative white ceramic mug on a wooden table",
+    "creditName": "Irina P",
+    "creditUrl": "https://www.pexels.com/photo/white-ceramic-mug-in-close-up-photography-12122888/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-BOTTLE-01": {
+    "src": "https://images.pexels.com/photos/7531578/pexels-photo-7531578.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative clear water bottle on a white desk",
+    "creditName": "Furknsaglam",
+    "creditUrl": "https://www.pexels.com/photo/bottle-on-top-of-a-desk-7531578/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-BOTTLE-02": {
+    "src": "https://images.pexels.com/photos/7531578/pexels-photo-7531578.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative clear water bottle on a white desk",
+    "creditName": "Furknsaglam",
+    "creditUrl": "https://www.pexels.com/photo/bottle-on-top-of-a-desk-7531578/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-BOTTLE-03": {
+    "src": "https://images.pexels.com/photos/7531578/pexels-photo-7531578.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative clear water bottle on a white desk",
+    "creditName": "Furknsaglam",
+    "creditUrl": "https://www.pexels.com/photo/bottle-on-top-of-a-desk-7531578/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  },
+  "DEMO-BOTTLE-04": {
+    "src": "https://images.pexels.com/photos/7531578/pexels-photo-7531578.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt": "Illustrative clear water bottle on a white desk",
+    "creditName": "Furknsaglam",
+    "creditUrl": "https://www.pexels.com/photo/bottle-on-top-of-a-desk-7531578/",
+    "licenseUrl": "https://www.pexels.com/license/"
+  }
+}
