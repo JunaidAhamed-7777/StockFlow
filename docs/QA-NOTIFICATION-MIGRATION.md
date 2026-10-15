@@ -51,6 +51,11 @@ not evidence of preservation after migration.
   restart n8n and wait for `/healthz/readiness`. Re-export and verify the five
   graphs, settings, pinned data, static data and published versions after restart;
   check published active IDs and activation errors without executing workflows.
+- In publication-service mode, require exactly three activated trigger node IDs
+  per workflow: `schedule`, `manual-check` and `send-discord-notification`.
+  The third entry comes from the native Discord v2 webhook definition. Trigger
+  registration is activation metadata; it does not establish a sent message or
+  a manual workflow execution. This exact set is checked in `1cae5d0`.
 - Persist an unverified status before restart. Only completed verification can
   produce an enabled status. Failures after workflow writes attempt to unpublish
   and drain the five schedules again, leaving a paused or explicitly unverified
