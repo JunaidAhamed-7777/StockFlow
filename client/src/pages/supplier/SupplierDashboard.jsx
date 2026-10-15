@@ -46,6 +46,9 @@ export function SupplierDashboard() {
         listOrderPage({ page: 1, pageSize: 8 }),
       ]);
       if (activeRequest !== requestId.current) return;
+      if ([...catalog.rows, ...stock.rows].some((product) => Number(product.supplierId) !== Number(supplier.id))) {
+        throw new Error("Catalog and inventory could not be verified for your supplier account. Try again.");
+      }
       setMetrics(catalog.summary);
       setProducts(catalog.rows);
       setLowStock(stock.rows);
