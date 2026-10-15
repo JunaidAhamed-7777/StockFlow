@@ -2,6 +2,8 @@
 
 StockFlow uses its existing API and local Docker n8n to post inventory notifications to **one chosen Discord channel**. Gmail setup was canceled. These deterministic workflows make **zero OpenAI calls**; no OpenAI key, Google OAuth, bot application, or n8n Cloud subscription is needed.
 
+Three additional [native role agents](ROLE-AGENTS.md) use GPT-5 mini for scheduled account reviews and grounded drafts. Their OpenAI credential and costs are separate from these free notification rules. The existing administrator agent is repaired, and supplier/customer agents are published with fixed account scopes and budget guardrails.
+
 **Local status verified on 15 October 2026: one labeled Discord connection test succeeded, and critical-stock alerts are enabled.** The other four workflows remain previews. The webhook is stored in n8n's encrypted credentials; the temporary URL file was deleted. All five installed graphs, credential bindings, published states, and disabled/enabled settings were checked after the activation restart. Private results are in `.local/discord-live-verification.json`. See [DISCORD.md](./DISCORD.md) for setup and activation. [MAIL-ROUTING.md](./MAIL-ROUTING.md) retains its filename for existing links and documents notification routing.
 
 ## Workflows

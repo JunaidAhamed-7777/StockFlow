@@ -40,6 +40,19 @@ Gmail OAuth setup was canceled by the user in favor of a Discord channel webhook
 
 ## Verification
 
+### Native agents and final frontend refinement
+
+- [x] Repair and publish the existing Admin Notification agent with GPT-5 mini.
+- [x] Add published supplier and customer agents with fixed account scopes, scheduled reviews, and budget guardrails.
+- [x] Store the root OpenAI key only in encrypted n8n credentials; keep every account login in ignored private documentation.
+- [x] Verify all three read-only role tools against real API data and one short successful model session per role ($0.00639355 recorded total).
+- [x] Remove login role chips, decorative marketing copy, misleading labels, and the disconnected forecasting probe.
+- [x] Consolidate form validation, search clearing, table contrast, navigation, and unsaved form protection.
+- [ ] Complete operational list pagination, integrated frontend checks, and the final desktop/mobile browser review.
+- [ ] Push the verified commits to `origin/main`.
+
+The verification notes below describe the earlier Discord setup. Current role-agent scope, costs, and evidence are documented in `automations/ROLE-AGENTS.md`.
+
 Frontend TypeScript, production build, and lint pass; the frontend dependency audit reports zero vulnerabilities. Seventeen frontend regression cases, 83 automation/routing/credential cases, and four runtime ownership cases pass (104 total). Customer desktop/mobile browser checks cover catalog, photos, search, empty states, pagination, quantity validation, cart, profile, and order details. Admin checks cover sign-in, role redirects, supplier directory, inventory, stock modal keyboard focus/restore, product editing, order details, and the automation UI. Supplier checks cover dashboard, own-product catalog, inventory, orders/subtotals, and rejection of another supplier's edit URL. Discord offline tests additionally cover routing, hostile content, truncation, native-node settings, unchanged execution graphs, private credential validation, connection-test confirmation, and repeat protection.
 
 Actual app restart and stopped-n8n autostart both pass. Database counts, JWT secret, n8n encryption configuration, encrypted API credential, owner login, and existing workflow IDs are preserved. The pre-existing disposable (`--rm`) n8n container was replaced with a persistent local container using the same preserved data volume. n8n is healthy after restarting to load the Discord schedules. One clearly labeled Discord connection test was confirmed; critical-stock posting is enabled every 15 minutes, with the other four workflows in preview. No products currently meet the critical condition, so verification did not produce a real stock alarm. No stock-owner emails, direct messages, or OpenAI calls were made. The webhook URL and token were checked against all 218 tracked files with zero matches. Every one of the 12 app accounts and the n8n owner login appears in the private login document. No final checkout was submitted; the database retains its original single sample order.
