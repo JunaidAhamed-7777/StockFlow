@@ -2,11 +2,11 @@ import { Icon } from "./Icon";
 
 export function StatCard({ label, value, hint, icon, tone }) {
   return (
-    <div className="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col justify-between space-y-space-sm hover:shadow-md transition-shadow">
+    <div className="min-w-0 bg-surface-container-lowest p-space-lg rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between space-y-space-sm">
       <div className="flex items-start justify-between gap-space-sm">
         <div className="flex flex-col min-w-0">
           <span className="font-label-sm text-label-sm uppercase tracking-wider text-outline">{label}</span>
-          <span className={`font-headline-lg text-[26px] tabular-nums mt-1 font-mono-data font-bold ${tone === "danger" ? "text-error" : "text-on-surface"}`}>
+          <span className={`font-headline-lg text-[30px] tabular-nums mt-1 font-bold ${tone === "danger" ? "text-error" : "text-on-surface"}`}>
             {value}
           </span>
         </div>

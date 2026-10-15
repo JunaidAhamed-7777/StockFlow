@@ -3,7 +3,7 @@ import { Button } from "./Button";
 
 export function ErrorState({ title = "Unable to load this view", message, onRetry }) {
   return (
-    <div className="bg-error-container/60 border border-red-200 rounded-xl p-space-lg flex flex-col sm:flex-row sm:items-center gap-space-md">
+    <div role="alert" className="bg-error-container/60 border border-red-200 rounded-xl p-space-lg flex flex-col sm:flex-row sm:items-center gap-space-md">
       <div className="w-10 h-10 rounded-lg bg-error-container flex items-center justify-center text-error shrink-0">
         <Icon name="error" />
       </div>
