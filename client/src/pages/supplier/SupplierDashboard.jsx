@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { getDashboard } from "../../services/dashboard.service";
-import { listProducts } from "../../services/product.service";
-import { getLowStock } from "../../services/stock.service";
-import { listOrders } from "../../services/order.service";
+import { listProductPage } from "../../services/product.service";
+import { listOrderPage } from "../../services/order.service";
 import { getErrorMessage } from "../../utils/errors";
 import { formatNumber, stockStatus } from "../../utils/format";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -42,18 +40,16 @@ export function SupplierDashboard() {
     setLoading(true);
     setError("");
     try {
-      const [dash, catalog, stock, orderRows] = await Promise.all([
-        getDashboard(),
-        listProducts({ supplier: supplier.id }),
-        getLowStock(),
-        listOrders(),
+      const [catalog, stock, orderRows] = await Promise.all([
+        listProductPage({ page: 1, pageSize: 8, supplier: supplier.id }),
+        listProductPage({ page: 1, pageSize: 8, supplier: supplier.id, stock: "low" }),
+        listOrderPage({ page: 1, pageSize: 8 }),
       ]);
       if (activeRequest !== requestId.current) return;
-      const ownedIds = new Set((catalog || []).map((product) => product.id));
-      setMetrics(dash.metrics);
-      setProducts((catalog || []).slice(0, 8));
-      setLowStock((stock || []).filter((product) => ownedIds.has(product.id)));
-      setOrders((orderRows || []).slice(0, 8));
+      setMetrics(catalog.summary);
+      setProducts(catalog.rows);
+      setLowStock(stock.rows);
+      setOrders(orderRows.rows);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -78,14 +74,14 @@ export function SupplierDashboard() {
       />
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-space-base">
         <StatCard label="Products" value={formatNumber(metrics?.productCount)} icon="inventory_2" />
-        <StatCard label="Units on hand" value={formatNumber(metrics?.stock)} icon="warehouse" />
-        <StatCard label="Low-stock products" value={formatNumber(lowStock.length)} icon="warning" tone="danger" />
+        <StatCard label="Units on hand" value={formatNumber(metrics?.totalQuantity)} icon="warehouse" />
+        <StatCard label="Low-stock products" value={formatNumber(metrics?.lowStockCount)} icon="warning" tone="danger" />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
         <Card>
           <CardHeader title="Low-stock products" action={<Button variant="outline" onClick={() => navigate("/supplier/stock")}>View inventory</Button>} />
           <Table
-            rows={lowStock.slice(0, 8)}
+            rows={lowStock}
             caption="Your low-stock products, up to eight shown"
             empty={<EmptyState icon="verified" title="No low-stock items" />}
             columns={[
@@ -105,7 +101,7 @@ export function SupplierDashboard() {
             columns={[
               { key: "id", header: "Order", render: (row) => <span className="font-mono-data">#{row.id}</span> },
               { key: "status", header: "Status", render: (row) => <OrderStatusBadge status={row.status} /> },
-              { key: "items", header: "Your items", align: "right", render: (row) => row.orderItems?.filter((item) => Number(item.product?.supplierId) === Number(supplier.id)).length || 0 },
+              { key: "visibleLineCount", header: "Your items", align: "right" },
             ]}
           />
         </Card>
