@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
 import { Pagination } from "../../components/ui/Pagination";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { listOrders } from "../../services/order.service";
 import { getErrorMessage } from "../../utils/errors";
 import { formatCurrency, formatDate } from "../../utils/format";
@@ -17,6 +17,8 @@ import { Button } from "../../components/ui/Button";
 
 export function CustomerOrders() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location.pathname + location.search;
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,7 +78,7 @@ export function CustomerOrders() {
             { key: "items", header: "Lines", align: "right", render: (row) => row.orderItems?.length || 0 },
             { key: "totalAmount", header: "Total", align: "right", render: (row) => formatCurrency(row.totalAmount) },
             { key: "status", header: "Status", render: (row) => <OrderStatusBadge status={row.status} /> },
-            { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View order ${row.id}`} onClick={(event) => { event.stopPropagation(); navigate(`/customer/orders/${row.id}`); }}>View order</Button> },
+            { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View order ${row.id}`} onClick={() => navigate(`/customer/orders/${row.id}`, { state: { returnTo } })}>View order</Button> },
           ]}
         />
         <Pagination {...pagination} onPageChange={pagination.setPage} label="Orders" />

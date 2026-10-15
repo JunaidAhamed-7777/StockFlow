@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { paginateRows } from "../src/utils/listState.mjs";
+import { listReturnTo, paginateRows } from "../src/utils/listState.mjs";
 
 test("complete datasets restore a URL page and clamp after filtering or deletion", () => {
   const records = Array.from({ length: 44 }, (_, id) => ({ id }));
@@ -12,6 +12,13 @@ test("complete datasets restore a URL page and clamp after filtering or deletion
   const deleted = paginateRows(records.slice(0, 20), "2");
   assert.equal(deleted.page, 1);
   assert.equal(deleted.rows.length, 20);
+});
+
+test("order details return to the customer's filtered list and reject other destinations", () => {
+  const path = "/customer/orders";
+  const value = `${path}?status=SHIPPED&page=2`;
+  assert.equal(listReturnTo(value, path), value);
+  for (const destination of ["https://evil.example/customer/orders", "//evil.example/customer/orders", "/admin/orders", "/customer/orders/1", `${value}#hidden`, null]) assert.equal(listReturnTo(destination, path), path);
 });
 
 test("invalid pages and empty lists stay on a usable first page without mutating records", () => {

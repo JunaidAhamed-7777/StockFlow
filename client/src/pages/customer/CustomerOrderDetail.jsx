@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { usePaginatedRows } from "../../hooks/useListState";
+import { listReturnTo } from "../../utils/listState.mjs";
+import { Pagination } from "../../components/ui/Pagination";
 import { getOrder } from "../../services/order.service";
 import { getErrorMessage } from "../../utils/errors";
 import { formatCurrency, formatDate } from "../../utils/format";
@@ -15,11 +18,14 @@ import { Button } from "../../components/ui/Button";
 export function CustomerOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = listReturnTo(location.state?.returnTo, "/customer/orders");
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [reloadKey, setReloadKey] = useState(0);
+  const pagination = usePaginatedRows(order?.orderItems || [], { pageKey: "itemsPage", ready: !loading && !error });
 
   useEffect(() => {
     let cancelled = false;
@@ -48,10 +54,10 @@ export function CustomerOrderDetail() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Orders</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium font-mono-data">#{order.id}</span></>}
+        breadcrumbs={[{ label: "Orders", to: returnTo }, { label: `#${order.id}` }]}
         title={`Order #${order.id}`}
         badge={<OrderStatusBadge status={order.status} />}
-        actions={<Button variant="outline" onClick={() => navigate("/customer/orders")}>Back to orders</Button>}
+        actions={<Button variant="outline" onClick={() => navigate(returnTo)}>Back to orders</Button>}
       />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
         <Card className="lg:col-span-4 p-space-xl space-y-space-sm font-body-sm">
@@ -62,7 +68,8 @@ export function CustomerOrderDetail() {
         </Card>
         <Card className="lg:col-span-8">
           <Table
-            rows={order.orderItems || []}
+            rows={pagination.rows}
+            caption={`Order ${order.id} items`}
             empty={<EmptyState title="No line items" />}
             columns={[
               { key: "sku", header: "SKU", render: (row) => <span className="font-mono-data">{row.product?.sku}</span> },
@@ -72,6 +79,7 @@ export function CustomerOrderDetail() {
               { key: "line", header: "Line", align: "right", render: (row) => formatCurrency(row.price * row.quantity) },
             ]}
           />
+          <Pagination {...pagination} onPageChange={pagination.setPage} label="Order items" />
         </Card>
       </div>
     </>
