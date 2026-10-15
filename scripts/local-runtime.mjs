@@ -95,7 +95,7 @@ function ensureN8n(config) {
   }
   if (config.n8nContainerId) throw new Error('The recorded n8n container is missing. Its credential volume was preserved; no replacement was created automatically.');
   if (listenerPids(5678).length) throw new Error('Port 5678 is occupied by an unverified service. It was not stopped or reused.');
-  run('docker', ['run', '--detach', '--name', 'n8n', '--publish', '127.0.0.1:5678:5678', '--env', 'TZ=Asia/Kolkata', '--env', 'GENERIC_TIMEZONE=Asia/Kolkata', '--volume', 'n8n_data:/home/node/.n8n', 'docker.n8n.io/n8nio/n8n:2.43.6']);
+  run('docker', ['run', '--detach', '--name', 'n8n', '--restart', 'unless-stopped', '--publish', '127.0.0.1:5678:5678', '--env', 'TZ=Asia/Kolkata', '--env', 'GENERIC_TIMEZONE=Asia/Kolkata', '--volume', 'n8n_data:/home/node/.n8n', 'docker.n8n.io/n8nio/n8n:2.43.6']);
   container = inspect('container', 'n8n');
   config.n8nContainerId = validateN8nContainer(container);
 }
