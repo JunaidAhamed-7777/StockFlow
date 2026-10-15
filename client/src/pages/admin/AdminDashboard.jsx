@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getDashboard } from "../../services/dashboard.service";
 import { getLowStock } from "../../services/stock.service";
@@ -24,8 +24,10 @@ export function AdminDashboard() {
   const [products, setProducts] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
 
   async function load() {
+    const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
@@ -35,19 +37,21 @@ export function AdminDashboard() {
         listOrders(),
         listProducts(),
       ]);
+      if (activeRequest !== requestId.current) return;
       setMetrics(dash.metrics);
       setLowStock(stock || []);
       setOrders((orderRows || []).slice(0, 8));
       setProducts((productRows || []).slice(0, 8));
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
+    return () => { requestId.current += 1; };
   }, []);
 
   if (loading) return <PageSkeleton />;
@@ -56,39 +60,27 @@ export function AdminDashboard() {
   return (
     <>
       <PageHeader
-        breadcrumb={
-          <>
-            <span>Admin Console</span>
-            <span className="text-outline-variant">/</span>
-            <span className="text-secondary font-medium">Executive Command Center</span>
-          </>
-        }
-        title="Operations overview"
+        title="Overview"
         description="Monitor stock availability, review recent orders, and act on inventory exceptions."
-        badge={
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container text-on-surface text-label-sm font-medium">
-            <span className="w-2 h-2 rounded-full bg-secondary" />
-            Inventory overview
-          </span>
-        }
         actions={
           <>
-            <Button variant="ghost" onClick={() => navigate("/admin/inventory")}>Stock Control</Button>
+            <Button variant="outline" onClick={() => navigate("/admin/inventory")}>View inventory</Button>
             <Button variant="dark" onClick={() => navigate("/admin/products")}>Open catalog</Button>
           </>
         }
       />
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-base">
-        <StatCard label="Total Products" value={formatNumber(metrics?.totalProducts)} icon="inventory_2" hint={`${formatNumber(metrics?.totalStock)} units on hand`} />
+        <StatCard label="Products" value={formatNumber(metrics?.totalProducts)} icon="inventory_2" hint={`${formatNumber(metrics?.totalStock)} units on hand`} />
         <StatCard label="Low-stock products" value={formatNumber(lowStock.length)} icon="warning" tone="danger" hint="Products at or below their reorder threshold" />
-        <StatCard label="Total Orders" value={formatNumber(metrics?.totalOrders)} icon="receipt_long" hint={`${formatNumber(metrics?.pendingOrders)} pending`} />
-        <StatCard label="Customers" value={formatNumber(metrics?.totalCustomers)} icon="groups" hint={`${formatNumber(metrics?.totalSuppliers)} suppliers in your network`} />
+        <StatCard label="Orders" value={formatNumber(metrics?.totalOrders)} icon="receipt_long" hint={`${formatNumber(metrics?.pendingOrders)} pending`} />
+        <StatCard label="Customers" value={formatNumber(metrics?.totalCustomers)} icon="groups" hint={`${formatNumber(metrics?.totalSuppliers)} suppliers`} />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
         <Card className="lg:col-span-7">
-          <CardHeader title="Exception queue · low stock" icon={<span className="material-symbols-outlined text-secondary">fmd_bad</span>} action={<Button variant="outline" onClick={() => navigate("/admin/inventory")}>Review all</Button>} />
+          <CardHeader title="Low-stock products" action={<Button variant="outline" onClick={() => navigate("/admin/inventory")}>View inventory</Button>} />
           <Table
-            rows={lowStock}
+            rows={lowStock.slice(0, 8)}
+            caption="Low-stock products, up to eight shown"
             empty={<EmptyState icon="inventory_2" title="No low-stock items" description="All tracked SKUs are above their thresholds." />}
             columns={[
               { key: "sku", header: "SKU", render: (row) => <span className="font-mono-data">{row.sku}</span> },
@@ -99,11 +91,12 @@ export function AdminDashboard() {
           />
         </Card>
         <Card className="lg:col-span-5">
-          <CardHeader title="Recent sales orders" action={<Button variant="outline" onClick={() => navigate("/admin/orders")}>Open ledger</Button>} />
+          <CardHeader title="Recent orders" action={<Button variant="outline" onClick={() => navigate("/admin/orders")}>View orders</Button>} />
           <Table
             rows={orders}
+            caption="Recent orders, up to eight shown"
             empty={<EmptyState icon="shopping_cart" title="No orders yet" />}
-            onRowClick={(_row) => navigate(`/admin/orders`)}
+            onRowClick={(row) => navigate(`/admin/orders?search=${row.id}`)}
             columns={[
               { key: "id", header: "Order", render: (row) => <span className="font-mono-data">#{row.id}</span> },
               { key: "totalAmount", header: "Total", align: "right", render: (row) => formatCurrency(row.totalAmount) },
@@ -113,9 +106,10 @@ export function AdminDashboard() {
         </Card>
       </section>
       <Card>
-        <CardHeader title="Master SKU snapshot" action={<Button variant="outline" onClick={() => navigate("/admin/products")}>Full catalog</Button>} />
+        <CardHeader title="Products" action={<Button variant="outline" onClick={() => navigate("/admin/products")}>View products</Button>} />
         <Table
           rows={products}
+          caption="Product overview, up to eight shown"
           empty={<EmptyState icon="inventory_2" title="No products found" />}
           columns={[
             { key: "sku", header: "SKU", render: (row) => <span className="font-mono-data">{row.sku}</span> },

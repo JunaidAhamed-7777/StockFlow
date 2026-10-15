@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getDashboard } from "../../services/dashboard.service";
 import { listOrders } from "../../services/order.service";
@@ -22,24 +22,28 @@ export function CustomerDashboard() {
   const [products, setProducts] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
 
   async function load() {
+    const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
       const [dash, orderRows, catalog] = await Promise.all([getDashboard(), listOrders(), listProducts()]);
+      if (activeRequest !== requestId.current) return;
       setMetrics(dash.metrics);
       setOrders((orderRows || []).slice(0, 6));
       setProducts((catalog || []).slice(0, 6));
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
+    return () => { requestId.current += 1; };
   }, []);
 
   if (loading) return <PageSkeleton />;
@@ -48,22 +52,22 @@ export function CustomerDashboard() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Procurement</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Customer desk</span></>}
-        title="Procurement overview"
-        description="Your orders, spending, and available supplies in one place."
+        title="Overview"
+        description="Your recent orders and the product catalog."
         actions={<Button variant="dark" onClick={() => navigate("/customer/products")}>Open catalog</Button>}
       />
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-base">
         <StatCard label="Orders" value={formatNumber(metrics?.orderCount)} icon="receipt_long" />
         <StatCard label="Pending" value={formatNumber(metrics?.pendingOrders)} icon="hourglass_top" />
         <StatCard label="Delivered" value={formatNumber(metrics?.deliveredOrders)} icon="local_shipping" />
-        <StatCard label="Total spend" value={formatCurrency(metrics?.totalSpending)} icon="payments" />
+        <StatCard label="Order value" value={formatCurrency(metrics?.totalSpending)} icon="payments" hint="Total value of your recorded orders" />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
         <Card>
-          <CardHeader title="Recent orders" action={<Button variant="outline" onClick={() => navigate("/customer/orders")}>All orders</Button>} />
+          <CardHeader title="Recent orders" action={<Button variant="outline" onClick={() => navigate("/customer/orders")}>View orders</Button>} />
           <Table
             rows={orders}
+            caption="Your recent orders, up to six shown"
             empty={<EmptyState icon="receipt_long" title="No orders yet" actionLabel="Browse catalog" onAction={() => navigate("/customer/products")} />}
             onRowClick={(row) => navigate(`/customer/orders/${row.id}`)}
             columns={[
@@ -74,9 +78,10 @@ export function CustomerDashboard() {
           />
         </Card>
         <Card>
-          <CardHeader title="Catalog highlights" action={<Button variant="outline" onClick={() => navigate("/customer/products")}>View all</Button>} />
+          <CardHeader title="Product catalog" action={<Button variant="outline" onClick={() => navigate("/customer/products")}>Browse catalog</Button>} />
           <Table
             rows={products}
+            caption="Product catalog, up to six shown"
             empty={<EmptyState icon="storefront" title="No products available" />}
             onRowClick={(row) => navigate(`/customer/products/${row.id}`)}
             columns={[

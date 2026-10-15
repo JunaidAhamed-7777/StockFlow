@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { getDashboard } from "../../services/dashboard.service";
@@ -26,8 +26,10 @@ export function SupplierDashboard() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
 
   async function load() {
+    const activeRequest = ++requestId.current;
     if (!supplier?.id) {
       setMetrics(null);
       setProducts([]);
@@ -46,19 +48,22 @@ export function SupplierDashboard() {
         getLowStock(),
         listOrders(),
       ]);
+      if (activeRequest !== requestId.current) return;
+      const ownedIds = new Set((catalog || []).map((product) => product.id));
       setMetrics(dash.metrics);
       setProducts((catalog || []).slice(0, 8));
-      setLowStock(stock || []);
+      setLowStock((stock || []).filter((product) => ownedIds.has(product.id)));
       setOrders((orderRows || []).slice(0, 8));
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
+    return () => { requestId.current += 1; };
   }, [supplier?.id]);
 
   if (loading) return <PageSkeleton />;
@@ -67,21 +72,21 @@ export function SupplierDashboard() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Supplier Portal</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Inbound Hub</span></>}
-        title={`${supplier?.companyName || "Supplier"} operations`}
-        description="Keep your catalog healthy, replenish low stock, and review customer orders."
-        actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")}>Add product</Button>}
+        title="Overview"
+        description={`Stock and customer orders for ${supplier?.companyName || "your company"}.`}
+        actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")}>Create product</Button>}
       />
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-space-base">
-        <StatCard label="Your SKUs" value={formatNumber(metrics?.productCount)} icon="inventory_2" />
+        <StatCard label="Products" value={formatNumber(metrics?.productCount)} icon="inventory_2" />
         <StatCard label="Units on hand" value={formatNumber(metrics?.stock)} icon="warehouse" />
-        <StatCard label="Low-stock SKUs" value={formatNumber(metrics?.lowStock)} icon="warning" tone="danger" />
+        <StatCard label="Low-stock products" value={formatNumber(lowStock.length)} icon="warning" tone="danger" />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
         <Card>
-          <CardHeader title="Low-stock buffers" action={<Button variant="outline" onClick={() => navigate("/supplier/stock")}>Manage</Button>} />
+          <CardHeader title="Low-stock products" action={<Button variant="outline" onClick={() => navigate("/supplier/stock")}>View inventory</Button>} />
           <Table
-            rows={lowStock}
+            rows={lowStock.slice(0, 8)}
+            caption="Your low-stock products, up to eight shown"
             empty={<EmptyState icon="verified" title="No low-stock items" />}
             columns={[
               { key: "sku", header: "SKU", render: (row) => <span className="font-mono-data">{row.sku}</span> },
@@ -92,22 +97,24 @@ export function SupplierDashboard() {
           />
         </Card>
         <Card>
-          <CardHeader title="Inbound orders" action={<Button variant="outline" onClick={() => navigate("/supplier/orders")}>Open</Button>} />
+          <CardHeader title="Recent orders" action={<Button variant="outline" onClick={() => navigate("/supplier/orders")}>View orders</Button>} />
           <Table
             rows={orders}
+            caption="Your recent supplied orders, up to eight shown"
             empty={<EmptyState icon="local_shipping" title="No supplier orders" />}
             columns={[
               { key: "id", header: "Order", render: (row) => <span className="font-mono-data">#{row.id}</span> },
               { key: "status", header: "Status", render: (row) => <OrderStatusBadge status={row.status} /> },
-              { key: "items", header: "Lines", align: "right", render: (row) => row.orderItems?.length || 0 },
+              { key: "items", header: "Your items", align: "right", render: (row) => row.orderItems?.filter((item) => Number(item.product?.supplierId) === Number(supplier.id)).length || 0 },
             ]}
           />
         </Card>
       </section>
       <Card>
-        <CardHeader title="Your catalog" action={<Button variant="outline" onClick={() => navigate("/supplier/products")}>All products</Button>} />
+        <CardHeader title="Products" action={<Button variant="outline" onClick={() => navigate("/supplier/products")}>View products</Button>} />
         <Table
           rows={products}
+          caption="Your product overview, up to eight shown"
           empty={<EmptyState icon="inventory_2" title="No products yet" actionLabel="Create product" onAction={() => navigate("/supplier/products/new")} />}
           columns={[
             { key: "sku", header: "SKU", render: (row) => <span className="font-mono-data">{row.sku}</span> },
