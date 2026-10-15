@@ -45,7 +45,7 @@ export function summarizeRoleToolContext(context, expectedRole) {
     if (!Number.isSafeInteger(value) || value < 0) throw new Error('The final role-tool context contained invalid counts.');
     return value;
   };
-  return {
+  const summary = {
     role: expectedRole,
     readOnly: true,
     accountScopeVerified: true,
@@ -61,21 +61,35 @@ export function summarizeRoleToolContext(context, expectedRole) {
     categories: count(context.categories?.totalCount),
     ...(expectedRole === 'ADMIN' ? { suppliers: count(context.suppliers?.totalCount) } : {}),
   };
+  if (summary.returnedProducts > summary.catalogMatches || summary.catalogMatches > summary.catalogProducts
+    || summary.inventoryProducts !== summary.catalogProducts || summary.returnedOrders > summary.orders
+    || summary.outOfStockProducts > summary.criticalStockProducts || summary.criticalStockProducts > summary.lowStockProducts
+    || summary.lowStockProducts > summary.inventoryProducts) throw new Error('The final role-tool context contained inconsistent counts.');
+  return summary;
 }
 
 export function summarizeRoleToolRun(definition, run, exitStatus) {
   const data = run?.data?.resultData || run?.resultData || run?.data || run;
   const runs = data?.runData;
-  if (exitStatus !== 0 || data?.error || !runs || typeof runs !== 'object' || data.lastNodeExecuted !== 'Project safe role context') throw new Error('The read-only tool did not complete at its final projection. Raw execution output was withheld.');
+  if (exitStatus !== 0 || run?.error || run?.data?.error || data?.error || (run?.finished !== undefined && run.finished !== true)
+    || (run?.status !== undefined && run.status !== 'success') || !runs || typeof runs !== 'object' || Array.isArray(runs)
+    || data.lastNodeExecuted !== 'Project safe role context') throw new Error('The read-only tool did not complete at its final projection. Raw execution output was withheld.');
   const expected = buildRoleAgentWorkflow(definition);
   const allowedNames = new Set(expected.nodes.map((node) => node.name));
   if (Object.keys(runs).some((name) => !allowedNames.has(name))) throw new Error('Unexpected node execution detected. Raw execution output was withheld.');
-  for (const name of ['Account login', 'Verify account', 'Assert account role', 'Read catalog', 'Read categories', 'Read scoped orders', 'Project safe role context']) {
-    if (!Array.isArray(runs[name]) || runs[name].length !== 1 || runs[name][0]?.error) throw new Error('The read-only tool did not complete its required checks. Raw execution output was withheld.');
+  const triggers = new Set(expected.nodes.filter((node) => ['n8n-nodes-base.manualTrigger', 'n8n-nodes-base.executeWorkflowTrigger'].includes(node.type)).map((node) => node.name));
+  if ([...triggers].filter((name) => Object.hasOwn(runs, name)).length !== 1) throw new Error('The read-only tool did not complete its required checks. Raw execution output was withheld.');
+  for (const node of expected.nodes.filter((node) => !triggers.has(node.name))) {
+    if (!Object.hasOwn(runs, node.name)) throw new Error('The read-only tool did not complete its required checks. Raw execution output was withheld.');
   }
-  const items = runs['Project safe role context'][0]?.data?.main?.flat() || [];
+  for (const rows of Object.values(runs)) {
+    if (!Array.isArray(rows) || rows.length !== 1 || !rows[0] || rows[0].error || (rows[0].executionStatus !== undefined && rows[0].executionStatus !== 'success')) throw new Error('The read-only tool did not complete its required checks. Raw execution output was withheld.');
+  }
+  const output = runs['Project safe role context'][0]?.data?.main;
+  if (!Array.isArray(output) || !output.every(Array.isArray)) throw new Error('The role tool returned an unexpected projection count.');
+  const items = output.flat();
   if (items.length !== 1) throw new Error('The role tool returned an unexpected projection count.');
-  return { workflowId: definition.id, success: true, ...summarizeRoleToolContext(items[0].json, definition.role), executedNodeCount: Object.keys(runs).length, openAiCalls: 0, businessMutations: 0 };
+  return { workflowId: definition.id, success: true, ...summarizeRoleToolContext(items[0]?.json, definition.role), executedNodeCount: Object.keys(runs).length, openAiCalls: 0, businessMutations: 0 };
 }
 
 function executeReadOnlyTool(definition) {

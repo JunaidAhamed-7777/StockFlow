@@ -5,7 +5,7 @@ import { assertMatchingRoleTool, summarizeRoleToolContext, summarizeRoleToolRun,
 
 const definition = ROLE_AGENT_WORKFLOWS[0];
 const context = (role = 'ADMIN') => ({ schemaVersion: 1, access: 'read-only', role, account: { id: 1, supplierId: 2, role, email: 'private@example.test', password: 'DO-NOT-LOG' }, scope: { supplierId: 2, customerId: 1 }, catalog: { totalCount: 44, matchedCount: 44, returnedCount: 40, items: [{ token: 'DO-NOT-LOG' }] }, inventory: { productCount: 44, lowStockCount: 2, criticalStockCount: 0, outOfStockCount: 0 }, orders: { totalCount: 1, returnedCount: 1 }, categories: { totalCount: 2 }, suppliers: { totalCount: 5 }, token: 'DO-NOT-LOG' });
-const run = (item = context()) => ({ data: { resultData: { lastNodeExecuted: 'Project safe role context', runData: Object.fromEntries(['Manual verification', 'Scope', 'Account login', 'Verify account', 'Assert account role', 'Read catalog', 'Read categories', 'Read scoped orders', 'Project safe role context'].map((name) => [name, [{ data: { main: [[{ json: name === 'Project safe role context' ? item : { token: 'DO-NOT-LOG' } }]] } }]])) } } });
+const run = (item = context()) => ({ data: { resultData: { lastNodeExecuted: 'Project safe role context', runData: Object.fromEntries(buildRoleAgentWorkflow(definition).nodes.filter(node => node.name !== 'Agent tool input').map(({ name }) => [name, [{ data: { main: [[{ json: name === 'Project safe role context' ? item : { token: 'DO-NOT-LOG' } }]] } }]])) } } });
 
 test('all three installed tools must match their builder before execution is possible', () => {
   for (const item of ROLE_AGENT_WORKFLOWS) assert.doesNotThrow(() => assertMatchingRoleTool(item, buildRoleAgentWorkflow(item)));
