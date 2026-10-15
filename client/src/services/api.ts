@@ -49,7 +49,7 @@ export function unwrap<T = unknown>(response: AxiosResponse<T | { data: T }>): T
   return body && typeof body === "object" && "data" in body ? body.data : body as T;
 }
 
-export async function getHealth(): Promise<{ success?: boolean }> {
-  const response = await api.get<{ success?: boolean }>("/health");
+export async function getHealth(signal?: AbortSignal): Promise<{ success?: boolean }> {
+  const response = await api.get<{ success?: boolean }>("/health", { signal });
   return response.data;
 }

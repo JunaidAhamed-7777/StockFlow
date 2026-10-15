@@ -1,6 +1,6 @@
 # Frontend capabilities and backend follow-up
 
-The production frontend uses the existing StockFlow API. No changes to `server/`, the Prisma schema, authentication behavior, or database structure were made as part of the frontend improvements. The following limits need backend work before an internet-facing production launch.
+The production frontend uses the existing StockFlow API. No changes to `server/`, the Prisma schema, server authentication behavior, or database structure were made as part of the frontend improvements. The following limits need backend work before an internet-facing production launch.
 
 ## Security issues requiring server fixes
 
@@ -30,7 +30,7 @@ The production frontend uses the existing StockFlow API. No changes to `server/`
 
 ## Frontend protections added
 
-Catalog searches accept keyboard submission, no longer mistake click events for search text, and ignore stale overlapping responses. Stock forms require valid nonnegative whole-number quantities, safe prices and real selections; stock adjustment reasons are required. Cart quantities are checked before checkout. Order-detail failures stay inside their dialog, successful updates preserve dialog state, and terminal transitions are disabled. Failed dashboard requests show recovery controls instead of misleading empty metrics. Product imagery, form labels, live notices, responsive filters, pagination, and supplier line subtotals improve access and reviewability.
+Catalog searches accept keyboard submission, no longer mistake click events for search text, and ignore stale overlapping responses. Stock forms require valid nonnegative whole-number quantities, safe prices and real selections; stock adjustment reasons are required. Product metadata edits omit quantity so they cannot overwrite stock changed after the form opened. Cart quantities are checked before checkout. Order-detail failures stay inside their dialog, successful updates preserve dialog state, and terminal or mixed-supplier transitions are disabled as appropriate. Cross-tab remembered-account replacements clear the previous identity and supplier context, gate protected pages during validation, and discard superseded session responses. Session-only accounts remain isolated to their own tab. Failed dashboard requests show recovery controls instead of misleading empty metrics. Product imagery, form labels, live notices, responsive filters, pagination, and supplier line subtotals improve access and reviewability.
 
 Client validation improves the interface but does not replace server validation or authorization. The findings above describe unresolved backend behavior, not a claim that the application has passed a production security assessment.
 
