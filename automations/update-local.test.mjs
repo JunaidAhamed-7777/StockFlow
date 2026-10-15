@@ -69,9 +69,14 @@ function fixture(t, { discord = true } = {}) {
     }
     if (command.includes('publish:workflow')) {
       const id = command.find((argument) => argument.startsWith('--id=')).slice('--id='.length);
+      assert.equal(state.ledger.filter((entry) => entry.includes('import:workflow')).length, 5, 'all imports precede the first publication');
+      const status = JSON.parse(readFileSync(path.join(local, 'automation-status.json'), 'utf8'));
+      assert.equal(status.maintenanceState, 'publishing-unverified'); assert.equal(status.schedulesPaused, false);
+      assert.equal(status.enabledWorkflows, null); assert.equal(status.deliveryVerified, false);
       state.workflows.get(id).active = !state.publishInactive;
       if (!state.publishInactive) state.workflows.get(id).activeVersionId = state.workflows.get(id).versionId;
       if (state.transformPublished) state.workflows.set(id, state.transformPublished(state.workflows.get(id)));
+      state.afterPublish?.(state.workflows.get(id));
       return '';
     }
     if (typeof script === 'string' && script.includes('writeFileSync')) {
@@ -140,6 +145,9 @@ test('ordinary apply disables all previously enabled workflows and preserves coo
   // Benign n8n defaults, matching published metadata and object-key ordering are allowed.
   f.state.transformStored = (workflow) => {
     workflow.settings.availableInMCP = false;
+    return reverseKeys(workflow);
+  };
+  f.state.transformPublished = (workflow) => {
     workflow.versionId = 'fixture-published-version'; workflow.activeVersionId = workflow.versionId;
     workflow.activeVersion = { versionId: workflow.versionId, nodes: structuredClone(workflow.nodes), connections: structuredClone(workflow.connections) };
     return reverseKeys(workflow);
@@ -242,7 +250,9 @@ test('deferred preview restart stores disabled templates without a restart or he
   assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).restartPending, true);
   assert.equal(f.state.waits, 0);
   assert.deepEqual(f.state.maintenanceCalls, ['quiesce']);
-  assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-pending-restart');
+  const status = JSON.parse(readFileSync(f.statusPath, 'utf8'));
+  assert.equal(status.maintenanceState, 'published-pending-restart');
+  assert.equal(status.schedulesPaused, false); assert.equal(status.deliveryVerified, false);
 });
 
 test('lost stored static data refuses to report enabled delivery', async (t) => {
@@ -423,4 +433,17 @@ test('stale, malformed or foreign migration locks are preserved without attempti
     assert.equal(readFileSync(lock, 'utf8'), previous);
     assert.deepEqual(f.state.ledger, []); assert.equal(f.state.maintenanceCreations, 0);
   }
+});
+
+test('all imported state is verified while unpublished and a resumed run is never overwritten by later imports', async (t) => {
+  const f = fixture(t); f.confirm();
+  f.state.afterPublish = (workflow) => {
+    if (workflow.id === 'StockFlowCritical01') workflow.staticData.global.sent['resumed-after-publication'] = { at: 777777, quantity: 0 };
+  };
+  await assert.rejects(updateLocal({ ...f.options, args: ['--apply', '--enable-low-stock'] }), /Stored workflow verification failed/);
+  const commands = f.state.ledger.map((command) => command.includes('import:workflow') ? 'import' : command.includes('publish:workflow') ? 'publish' : 'other');
+  assert.ok(commands.lastIndexOf('import') < commands.indexOf('publish'));
+  assert.ok(f.state.ledger.some((command) => command.includes('export:workflow') && command.some((argument) => argument.includes('verify-unpublished'))));
+  assert.deepEqual(f.state.workflows.get('StockFlowCritical01').staticData.global.sent['resumed-after-publication'], { at: 777777, quantity: 0 });
+  assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-after-failure');
 });

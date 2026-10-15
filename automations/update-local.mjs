@@ -68,14 +68,15 @@ function preserveSettings(source, previous) {
   return { settings: structuredClone(settings), pinData: pins === undefined ? {} : structuredClone(pins) };
 }
 
-function verifyStored(expectedWorkflows, workflows) {
+function verifyStored(expectedWorkflows, workflows, { published = true } = {}) {
   const stored = new Map(workflows.map((workflow) => [workflow.id, workflow]));
   for (const expected of expectedWorkflows) {
     const actual = stored.get(expected.id);
     if (!actual || hash(actual.nodes) !== hash(expected.nodes) || hash(actual.connections) !== hash(expected.connections)
       || hash(actual.staticData ?? null) !== hash(expected.staticData ?? null)
       || settingsHash(actual.settings) !== settingsHash(expected.settings)
-      || hash(actual.pinData ?? {}) !== hash(expected.pinData ?? {}) || !publishedVersionMatches(actual)) fail('Stored workflow verification failed. Delivery status was not marked enabled.');
+      || hash(actual.pinData ?? {}) !== hash(expected.pinData ?? {})
+      || (published ? !publishedVersionMatches(actual) : actual.active !== false || actual.activeVersionId !== null || typeof actual.versionId !== 'string' || !actual.versionId)) fail('Stored workflow verification failed. Delivery status was not marked enabled.');
   }
 }
 
@@ -207,8 +208,14 @@ export async function updateLocal({
           await docker(['exec', '-i', 'n8n', 'node', '-e', `require('fs').writeFileSync('${filename}',require('fs').readFileSync(0),{mode:384})`], JSON.stringify(workflow));
           workflowWritesStarted = true;
           await docker(['exec', 'n8n', 'n8n', 'import:workflow', `--input=${filename}`]);
-          await docker(['exec', 'n8n', 'n8n', 'publish:workflow', `--id=${workflow.id}`]);
         } finally { await docker(['exec', 'n8n', 'node', '-e', `require('fs').rmSync('${filename}',{force:true})`]); }
+      }
+      // Verify every imported graph and the drained state before any schedule can resume.
+      verifyStored(prepared, await exportWorkflows('verify-unpublished'), { published: false });
+      paused = false;
+      writeMaintenanceStatus('publishing-unverified', null, 'All five imported definitions were verified. Publication may resume schedules before restart; activation and delivery are not yet verified.');
+      for (const workflow of prepared) {
+        await docker(['exec', 'n8n', 'n8n', 'publish:workflow', `--id=${workflow.id}`]);
       }
       verifyStored(prepared, await exportWorkflows('verify-update'));
       if (!deferRestart) {
@@ -230,9 +237,10 @@ export async function updateLocal({
       writeFileSync(statusPath, JSON.stringify({
         installedAt: new Date().toISOString(), workflows: prepared.map((workflow) => workflow.id), deliveryMode: 'discord', destination: summary.destination,
         enabledWorkflows: enableLowStock ? ['StockFlowCritical01'] : [], restartPending: deferRestart,
-        maintenanceState: deferRestart ? 'paused-pending-restart' : 'complete', schedulesPaused: paused, deliveryVerified: !deferRestart,
+        maintenanceState: deferRestart ? 'published-pending-restart' : 'complete', schedulesPaused: paused, deliveryVerified: !deferRestart,
         discordCredentialId: discord?.id || null, channelId: confirmation?.channelId || null, gmailCanceled: true,
-        reason: enableLowStock ? 'Critical-stock alerts enabled for the confirmed Discord channel. All other workflows remain previews.' : 'Discord workflows installed with delivery disabled.', openAiCalls: 0,
+        reason: deferRestart ? 'Preview definitions are published and schedules may be active. A controlled restart and verification are still required.'
+          : enableLowStock ? 'Critical-stock alerts enabled for the confirmed Discord channel. All other workflows remain previews.' : 'Discord workflows installed with delivery disabled.', openAiCalls: 0,
       }, null, 2), { mode: 0o600 });
     } catch (error) {
       if (restartAttempted || workflowWritesStarted) {
