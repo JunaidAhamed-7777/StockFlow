@@ -35,13 +35,17 @@ node scripts/write-login-doc.mjs
 
 ## Local n8n automation
 
-Three rule-based workflows are installed and published in preview mode:
+Five rule-based workflows are available locally and default to preview mode:
 
 - Critical stock alerts every 15 minutes, grouped by stock owner with cooldowns.
 - Daily owner inventory digests at 09:00 Asia/Kolkata.
 - Open-order follow-up at 10:00 Asia/Kolkata for orders at least 48 hours old.
+- Weekly inventory data-quality audit on Monday at 09:30 Asia/Kolkata, only when issues exist.
+- New and changed order alerts every 15 minutes, with an initial baseline that suppresses historical messages.
 
-**Gmail delivery is disabled until a Gmail OAuth credential is connected in n8n.** No email was sent during testing. Reserved demo addresses are always excluded. The n8n sign-in credentials do not authorize Gmail. Follow [automation setup](automations/README.md) to connect the intended Gmail sender and enable delivery.
+**All outbound workflow email is redirected to `junuhammad2@gmail.com`.** Each email explicitly identifies its intended owner/administrator and their recorded address; no owner is added to To, CC, or BCC. Reserved demo addresses may appear as intended-recipient metadata but never as actual destinations. See [mail routing](automations/MAIL-ROUTING.md).
+
+**Delivery remains disabled until send-only Gmail OAuth is connected in n8n.** The n8n sign-in credentials do not authorize Gmail. Follow [automation setup](automations/README.md), then use the guarded updater to enable only low-stock delivery. The other workflows remain in preview until deliberately enabled. No email was sent during the current disconnected tests.
 
 These workflows make no OpenAI calls. The root OpenAI API key stays private and is not needed for stock rules. AI forecast/recommendation endpoints remain unimplemented; the UI shows that limitation honestly.
 
@@ -52,12 +56,12 @@ npm run typecheck
 npm run build
 npm run lint --workspace client
 npm test --workspace client
-node --test automations/notification-rules.test.mjs
+node --test automations/*.test.mjs
 node automations/verify-local.mjs
 npm audit --workspace client
 ```
 
-The n8n verifier refuses to run workflows whose live delivery settings or routing differ from the disabled-delivery source. It reports only redacted execution summaries, with no bearer tokens.
+The n8n verifier refuses to run workflows whose executable graphs differ from the disabled-delivery source, including altered recipients or live-enabled settings. It reports only redacted execution summaries, with no bearer tokens. Run it before enabling live low-stock mail.
 
 ## Scope and known limits
 

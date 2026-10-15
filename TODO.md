@@ -25,6 +25,17 @@ This work uses the existing API and Prisma schema. `server/` remains unchanged.
 
 - [ ] Connect a Gmail OAuth credential in n8n, select it on each Gmail node, review real stock-owner emails, and enable delivery. The instance has no Gmail authorization/client credentials, so live mail delivery is deliberately disabled. The supplied n8n password does not authorize Google access. Exact instructions are in `automations/README.md`; no mail or paid AI tests were performed.
 
+## Gmail redirection and additional workflows
+
+- [x] Add explicit redirected delivery to `junuhammad2@gmail.com`, with intended owner name, address, and supplier ID in each message.
+- [x] Lock every Gmail node to the same destination; prohibit CC/BCC and gate delivery on the redirect and recipient metadata.
+- [x] Add a weekly inventory data-quality audit using existing product/category/supplier APIs.
+- [x] Add new/order-status notifications with a first-run history baseline and supplier-specific order lines.
+- [x] Prepare the Gmail OAuth credential form with only `https://www.googleapis.com/auth/gmail.send`.
+- [x] Add strict credential validation and updates that preserve delivery markers and order baselines.
+- [ ] Complete Google OAuth in n8n. Google Cloud's project/client setup pages failed to render in the in-app browser; the user has been asked to complete those Google steps in a regular browser and enter the client credentials directly in the prepared n8n form.
+- [ ] Send one explicitly labeled connection test to the redirect mailbox and enable low-stock delivery after OAuth succeeds.
+
 ## Verification
 
 Frontend TypeScript, production build, and lint pass; the frontend dependency audit reports zero vulnerabilities. Seventeen frontend regression cases, 22 notification-rule cases, and four runtime ownership cases pass (43 total). Customer desktop/mobile browser checks cover catalog, photos, search, empty states, pagination, quantity validation, cart, profile, and order details. Admin checks cover sign-in, role redirects, supplier directory, inventory, stock modal keyboard focus/restore, product editing, order details, and the automation UI. Supplier checks cover dashboard, own-product catalog, inventory, orders/subtotals, and rejection of another supplier's edit URL. All three n8n previews use the real local API and leave delivery disabled.
