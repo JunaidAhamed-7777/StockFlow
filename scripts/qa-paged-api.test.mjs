@@ -105,6 +105,12 @@ test('late CID and uniquely named recovery require the full random ownership pro
 
 test('database operations and deletion require exact CID, random label and private loopback configuration', () => {
   assert.equal(verifyDisposableContainer(validContainer(), plan, id, password), 55321);
+  const desktop = validContainer();
+  desktop.Mounts = [];
+  desktop.HostConfig = { Tmpfs: { '/var/lib/postgresql/data': 'rw,nosuid,nodev,size=1g' }, Binds: null };
+  assert.equal(verifyDisposableContainer(desktop, plan, id, password), 55321);
+  assert.throws(() => verifyDisposableContainer({ ...desktop, HostConfig: { ...desktop.HostConfig, Binds: ['private:/other'] } }, plan, id, password));
+  assert.throws(() => verifyDisposableContainer({ ...desktop, HostConfig: { Tmpfs: { '/var/lib/postgresql/data': 'rw' } } }, plan, id, password));
   const edits = [
     (container) => { container.Id = 'b'.repeat(64); },
     (container) => { container.Name = '/stockflow-db'; },

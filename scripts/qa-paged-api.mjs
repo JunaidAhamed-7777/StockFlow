@@ -106,6 +106,9 @@ export function verifyDisposableContainer(container, plan, createdId, password) 
   }));
   const bindings = container?.NetworkSettings?.Ports?.['5432/tcp'];
   const mounts = container?.Mounts || [];
+  const tmpfs = container?.HostConfig?.Tmpfs;
+  const configuredTmpfs = tmpfs && Object.keys(tmpfs).length === 1
+    && tmpfs['/var/lib/postgresql/data'] === 'rw,nosuid,nodev,size=1g';
   const port = bindings?.[0]?.HostPort;
   if (!/^[a-f0-9]{64}$/.test(createdId || '') || container?.Id !== createdId
     || container?.Name !== `/${plan.name}` || container?.Config?.Image !== plan.image
@@ -115,7 +118,8 @@ export function verifyDisposableContainer(container, plan, createdId, password) 
     || !Array.isArray(bindings) || bindings.length !== 1 || bindings[0].HostIp !== '127.0.0.1'
     || !/^\d+$/.test(port || '') || Number(port) < 1 || Number(port) > 65535
     || mounts.some((mount) => mount.Type === 'bind' || mount.Type === 'volume')
-    || !mounts.some((mount) => mount.Type === 'tmpfs' && mount.Destination === '/var/lib/postgresql/data')) {
+    || (container?.HostConfig?.Binds?.length || 0) > 0
+    || !configuredTmpfs && !mounts.some((mount) => mount.Type === 'tmpfs' && mount.Destination === '/var/lib/postgresql/data')) {
     throw new Error('Disposable PostgreSQL ownership could not be verified; no database operation or removal is permitted.');
   }
   return Number(port);
