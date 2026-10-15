@@ -43,15 +43,15 @@ export function AdminStockTransactions() {
     <>
       <PageHeader
         breadcrumb={<><span>Governance</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Audit ledger</span></>}
-        title="Stock Transactions Audit Ledger"
-        description="This view calls GET /api/stock/transactions. Adjustments still record transactions on the server, but listing is not implemented yet."
+        title="Stock transactions"
+        description="Review the history of inventory receipts, issues, and manual adjustments when transaction history is available."
       />
       {loading ? <PageSkeleton /> : null}
       {error ? <ErrorState message={error} onRetry={load} /> : null}
       {unavailable ? (
         <UnavailableState
           title="Transaction listing unavailable"
-          message="The stock transaction ledger endpoint is not implemented yet. Stock still changes through order placement and manual adjustments; the immutable list cannot be retrieved until the backend exposes it."
+          message="Transaction history is not available yet. Orders and stock adjustments continue to update inventory and record movements, but this workspace cannot display their history until the service supports it."
         />
       ) : !loading && !error ? (
         <Card>

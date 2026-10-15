@@ -52,15 +52,15 @@ export function SupplierStock() {
   }, [supplier?.id]);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
     <>
       <PageHeader
         breadcrumb={<><span>Inventory</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Allocations</span></>}
-        title="Supplier Stock Management"
-        description="Adjustments are authorized by the backend for SKUs you own."
+        title="Your inventory"
+        description="Review availability and record stock received or issued with a reason for each change."
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-space-base">
         <StatCard label="Owned SKUs" value={products.length} icon="inventory_2" />
         <StatCard label="Low-stock SKUs" value={lowStock.length} icon="warning" tone="danger" />

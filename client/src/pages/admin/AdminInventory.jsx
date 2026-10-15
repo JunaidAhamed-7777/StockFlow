@@ -41,6 +41,7 @@ export function AdminInventory() {
   }, []);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
 
   const totalUnits = products.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
@@ -48,10 +49,9 @@ export function AdminInventory() {
     <>
       <PageHeader
         breadcrumb={<><span>Operations</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Multi-node stock</span></>}
-        title="Inventory Stock Allocation"
-        description="On-hand quantities and low-stock exceptions from the live catalog. Adjustments write through PATCH /api/stock/adjust."
+        title="Inventory management"
+        description="Review stock availability and record adjustments with a traceable reason."
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-space-base">
         <StatCard label="Tracked SKUs" value={products.length} icon="inventory_2" />
         <StatCard label="Units on hand" value={totalUnits} icon="warehouse" />
