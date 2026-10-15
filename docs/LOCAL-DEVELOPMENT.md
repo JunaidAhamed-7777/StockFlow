@@ -46,6 +46,8 @@ If setup was interrupted after creating tables but before completing the seed, t
 
 The existing Docker container named `n8n` is reused after verifying its official image, port, persistent credential mount, and saved container identity. A stopped n8n container is started. Its `n8n_data` storage, local login, encryption configuration, credentials, and workflows are preserved. If no n8n container exists on first setup, the launcher creates one with local persistent storage and loopback-only port publishing. It never connects to n8n Cloud.
 
+The verified local n8n setup uses a persistent container with restart policy `unless-stopped`. An older container launched with Docker's `--rm` option is removed automatically when stopped; its named volume survives, but the launcher deliberately refuses to adopt a replacement container ID automatically. Recover that exact volume and verify the existing encryption configuration, credentials, and workflows before recording a replacement identity. The current workspace was migrated from such a temporary container without resetting its `n8n_data` volume.
+
 If a recorded database or n8n container is later missing, the launcher reports that condition instead of silently replacing it or initializing over an unknown volume. Restore or inspect the intended Docker resources before retrying.
 
 ## Private files and logs
