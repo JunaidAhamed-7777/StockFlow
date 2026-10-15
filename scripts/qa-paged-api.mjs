@@ -69,7 +69,7 @@ export function verifyGeneratedClientSource(source, directory, clientDirectory) 
     schema_directory_contained: schemaDirectory !== null
       && (schemaDirectory === path.resolve(directory) || contained(directory, schemaDirectory)),
     env_paths_shape: Boolean(envPaths && typeof envPaths === 'object' && !Array.isArray(envPaths)
-      && Object.hasOwn(envPaths, 'rootEnvPath') && Object.hasOwn(envPaths, 'schemaEnvPath')),
+      && Object.keys(envPaths).every((key) => key === 'rootEnvPath' || key === 'schemaEnvPath')),
     env_paths_contained: Boolean(envPaths && Object.values(envPaths).every((value) => value === null
       || (typeof value === 'string' && contained(directory, path.resolve(clientDirectory, value))))),
     active_provider: config.activeProvider === 'postgresql',
@@ -182,7 +182,8 @@ function assertNoSecrets(value) {
 
 export async function runCaptured(executable, args, { env, cwd, timeout = 120_000, signal, spawnImpl = spawn } = {}) {
   return new Promise((resolve, reject) => {
-    const commandArgs = executable === 'docker' ? ['--context', 'default', ...args] : args;
+    if (executable === 'docker' && env?.DOCKER_HOST) verifyLocalDockerEndpoint(env.DOCKER_HOST);
+    const commandArgs = executable === 'docker' && env?.DOCKER_HOST ? ['--host', env.DOCKER_HOST, ...args] : args;
     const child = spawnImpl(executable, commandArgs, { env, cwd, signal, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = '';
     let timedOut = false; let failedToStart = false; let forceTimer;

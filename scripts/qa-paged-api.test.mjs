@@ -54,6 +54,8 @@ test('generated client guard rejects checkout env paths, external runtime import
   activeProvider: 'postgresql', inlineDatasources: { db: { url: { fromEnvVar: 'DATABASE_URL', value: null } } } };
   const source = (value) => `const config = ${JSON.stringify(value, null, 2)}\nconfig.dirname = __dirname\nrequire('./runtime/library.js')\n`;
   assert.doesNotThrow(() => verifyGeneratedClientSource(source(config), directory, output));
+  assert.doesNotThrow(() => verifyGeneratedClientSource(source({ ...config, relativeEnvPaths: {} }), directory, output));
+  assert.doesNotThrow(() => verifyGeneratedClientSource(source({ ...config, relativeEnvPaths: { rootEnvPath: null } }), directory, output));
   for (const edit of [
     (copy) => { copy.relativeEnvPaths.schemaEnvPath = '../../.env'; },
     (copy) => { copy.relativeEnvPaths.rootEnvPath = path.resolve('server/.env'); },
@@ -70,7 +72,7 @@ test('generated client guard rejects checkout env paths, external runtime import
   assert.throws(() => verifyGeneratedClientSource('throw new Error("configuration is not evaluated")', directory, output));
   const malformed = structuredClone(config);
   malformed.inlineDatasources.db.url.value = 'do-not-print-sensitive-literal';
-  delete malformed.relativeEnvPaths.schemaEnvPath;
+  malformed.relativeEnvPaths.unrecognized = null;
   assert.throws(() => verifyGeneratedClientSource(source(malformed), directory, output), (error) => {
     assert.match(error.message, /Failed checks: env_paths_shape, datasource_literal_absent\./);
     assert.ok(!error.message.includes('do-not-print-sensitive-literal'));
@@ -83,8 +85,8 @@ test('subprocess timeout waits for close before a caller can enter CID cleanup',
   const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
   let killed = false; let settled = false;
   child.kill = () => { killed = true; };
-  const task = runCaptured('docker', ['run'], { timeout: 1, spawnImpl: (_executable, args) => {
-    assert.deepEqual(args, ['--context', 'default', 'run']); return child;
+  const task = runCaptured('docker', ['run'], { timeout: 1, env: { DOCKER_HOST: 'npipe:////./pipe/dockerDesktopLinuxEngine' }, spawnImpl: (_executable, args) => {
+    assert.deepEqual(args, ['--host', 'npipe:////./pipe/dockerDesktopLinuxEngine', 'run']); return child;
   } }).finally(() => { settled = true; });
   const rejection = assert.rejects(task, /timed out and was closed/);
   await new Promise((resolve) => setTimeout(resolve, 15));
