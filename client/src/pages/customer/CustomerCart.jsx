@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../../context/CartContext";
 import { createOrder } from "../../services/order.service";
-import { listProducts } from "../../services/product.service";
+import { getProduct } from "../../services/product.service";
 import { clearFieldError, focusFirstError, validateForm } from "../../utils/formValidation";
 import { getErrorMessage } from "../../utils/errors";
 import { formatCurrency } from "../../utils/format";
@@ -23,6 +23,8 @@ export function CustomerCart() {
   const [quantityDrafts, setQuantityDrafts] = useState({});
   const [notice, setNotice] = useState("");
   const [uncertain, setUncertain] = useState(false);
+  const validationRequest = useRef(null);
+  useEffect(() => () => { validationRequest.current?.abort(); }, []);
 
   async function checkout(event) {
     event.preventDefault();
@@ -37,10 +39,27 @@ export function CustomerCart() {
     setSaving(true);
     setError("");
     setNotice("");
+    const controller = new AbortController();
+    validationRequest.current = controller;
     let submittingOrder = false;
     try {
-      const currentProducts = await listProducts();
-      const latest = new Map(currentProducts.map((product) => [Number(product.id), product]));
+      const productIds = [...new Set(items.map((item) => item.productId))];
+      const latest = new Map();
+      let nextIndex = 0;
+      await Promise.all(Array.from({ length: Math.min(4, productIds.length) }, async () => {
+        while (nextIndex < productIds.length) {
+          const productId = productIds[nextIndex++];
+          try {
+            const product = await getProduct(productId, { signal: controller.signal });
+            if (Number(product?.id) !== productId) throw new Error("Product availability could not be verified. Try again before placing your order.");
+            latest.set(productId, product);
+          } catch (err) {
+            if (err?.response?.status === 404) latest.set(productId, null);
+            else throw err;
+          }
+        }
+      }));
+      controller.signal.throwIfAborted();
       let changed = false;
       for (const item of items) {
         const product = latest.get(item.productId);
@@ -64,11 +83,14 @@ export function CustomerCart() {
       clear();
       navigate(`/customer/orders/${order.id}`);
     } catch (err) {
+      if (controller.signal.aborted && !submittingOrder) return;
+      if (!submittingOrder) controller.abort();
       if (submittingOrder && (!err?.response || err.response.status >= 500)) {
         setUncertain(true);
         setError("We could not confirm whether your order was placed. Check your orders before submitting again to avoid a duplicate order.");
       } else setError(getErrorMessage(err));
     } finally {
+      if (validationRequest.current === controller) validationRequest.current = null;
       setSaving(false);
     }
   }
