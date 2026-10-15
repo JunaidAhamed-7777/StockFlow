@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { CART_KEY, readStorage, writeStorage } from "../utils/storage";
 import { useAuth } from "./AuthContext";
+import { isPositiveInteger, sanitizeCart } from "../utils/cart";
 
 const CartContext = createContext(null);
 
@@ -8,24 +9,38 @@ function cartStorageKey(userId) {
   return `${CART_KEY}.${userId || "guest"}`;
 }
 
+function loadCart(key) {
+  return sanitizeCart(readStorage(key, []));
+}
+
 export function CartProvider({ children }) {
   const { user } = useAuth();
   const storageKey = cartStorageKey(user?.id);
-  const [items, setItems] = useState(() => {
-    const stored = readStorage(storageKey, []);
-    return Array.isArray(stored) ? stored : [];
-  });
+  const [cart, setCart] = useState(() => ({ key: storageKey, items: loadCart(storageKey) }));
+  // Never expose the previous account's cart during a session change.
+  const items = cart.key === storageKey ? cart.items : loadCart(storageKey);
 
   useEffect(() => {
-    const stored = readStorage(storageKey, []);
-    setItems(Array.isArray(stored) ? stored : []);
+    setCart({ key: storageKey, items: loadCart(storageKey) });
+  }, [storageKey]);
+
+  const changeItems = useCallback((update) => {
+    setCart((current) => {
+      const source = current.key === storageKey ? current.items : loadCart(storageKey);
+      const next = sanitizeCart(update(source));
+      writeStorage(storageKey, next);
+      return { key: storageKey, items: next };
+    });
   }, [storageKey]);
 
   const addItem = useCallback(
     (product, quantity = 1) => {
-      const qty = Math.max(1, Number(quantity) || 1);
-      const available = Number(product.quantity) || 0;
-      setItems((current) => {
+      if (!product || !isPositiveInteger(product.id) || !isPositiveInteger(quantity) || !isPositiveInteger(product.quantity)) return false;
+      const qty = Number(quantity);
+      const available = Number(product.quantity);
+      const price = Number(product.price);
+      if (!Number.isFinite(price) || price < 0) return false;
+      changeItems((current) => {
         const next = [...current];
         const productId = Number(product.id);
         const index = next.findIndex((item) => Number(item.productId) === productId);
@@ -34,7 +49,7 @@ export function CartProvider({ children }) {
           next[index] = {
             ...next[index],
             productId,
-            quantity: available > 0 ? Math.min(available, proposed) : proposed,
+            quantity: Math.min(available, proposed),
             name: product.name,
             sku: product.sku,
             price: Number(product.price),
@@ -46,48 +61,43 @@ export function CartProvider({ children }) {
             name: product.name,
             sku: product.sku,
             price: Number(product.price),
-            quantity: available > 0 ? Math.min(qty, available) : qty,
+            quantity: Math.min(qty, available),
             stock: available,
           });
         }
-        writeStorage(storageKey, next);
         return next;
       });
+      return true;
     },
-    [storageKey]
+    [changeItems]
   );
 
   const updateQuantity = useCallback(
     (productId, quantity) => {
       const qty = Number(quantity);
       const id = Number(productId);
-      setItems((current) => {
-        const next =
-          !Number.isFinite(qty) || qty <= 0
-            ? current.filter((item) => Number(item.productId) !== id)
-            : current.map((item) => (Number(item.productId) === id ? { ...item, quantity: qty, productId: id } : item));
-        writeStorage(storageKey, next);
-        return next;
-      });
+      // Empty or partly edited inputs must not silently delete a line item.
+      if (!isPositiveInteger(qty) || !isPositiveInteger(id)) return;
+      changeItems((current) => current.map((item) => Number(item.productId) === id
+        ? { ...item, quantity: Math.min(qty, item.stock), productId: id }
+        : item));
     },
-    [storageKey]
+    [changeItems]
   );
 
   const removeItem = useCallback(
     (productId) => {
-      setItems((current) => {
+      changeItems((current) => {
         const next = current.filter((item) => Number(item.productId) !== Number(productId));
-        writeStorage(storageKey, next);
         return next;
       });
     },
-    [storageKey]
+    [changeItems]
   );
 
   const clear = useCallback(() => {
-    writeStorage(storageKey, []);
-    setItems([]);
-  }, [storageKey]);
+    changeItems(() => []);
+  }, [changeItems]);
 
   const count = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
