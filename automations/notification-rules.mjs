@@ -1,24 +1,33 @@
 /** Pure rules shared by n8n Code nodes and offline tests. No AI or network calls. */
-export function resolveDeliverySettings({ deliveryMode = 'preview', redirectTo, mailEnabled = false } = {}) {
-  if (!['preview', 'redirect', 'owner'].includes(deliveryMode)) throw new Error('Unknown delivery mode; refusing to send mail.');
+export function resolveDeliverySettings({ deliveryMode = 'preview', redirectTo, mailEnabled = false, notificationsEnabled = false } = {}) {
+  if (!['preview', 'redirect', 'owner', 'discord'].includes(deliveryMode)) throw new Error('Unknown delivery mode; refusing to send notifications.');
   const target = typeof redirectTo === 'string' ? redirectTo.trim() : '';
   const validEmail = (email) => /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(email) && !/@(?:.*\.)?(?:example\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) && !/\.(?:test|local|invalid|example)$/i.test(email);
   if (deliveryMode === 'redirect' && !validEmail(target)) throw new Error('Redirect mode requires one valid, deliverable redirectTo address; refusing to send mail.');
-  return { deliveryMode, redirectTo: deliveryMode === 'redirect' ? target : undefined, mailEnabled: mailEnabled === true, deliveryEnabled: deliveryMode !== 'preview' && mailEnabled === true };
+  return { deliveryMode, redirectTo: deliveryMode === 'redirect' ? target : undefined, mailEnabled: mailEnabled === true, notificationsEnabled: notificationsEnabled === true, deliveryEnabled: deliveryMode === 'discord' ? notificationsEnabled === true : deliveryMode !== 'preview' && mailEnabled === true };
 }
 
-export function createOwnerNotification({ supplier, mode, subject, lines = [], events = [], deliveryMode, redirectTo, mailEnabled }) {
-  const delivery = resolveDeliverySettings({ deliveryMode, redirectTo, mailEnabled });
+export function createOwnerNotification({ supplier, mode, subject, lines = [], events = [], deliveryMode, redirectTo, mailEnabled, notificationsEnabled }) {
+  const delivery = resolveDeliverySettings({ deliveryMode, redirectTo, mailEnabled, notificationsEnabled });
   const email = typeof supplier.user?.email === 'string' ? supplier.user.email.trim() : '';
   const validSyntax = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(email);
   const reservedEmail = /@(?:.*\.)?(?:example\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) || /\.(?:test|local|invalid|example)$/i.test(email);
-  if (!validSyntax || (reservedEmail && delivery.deliveryMode !== 'redirect')) return null;
-  const safe = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, 180);
+  if (!validSyntax || (reservedEmail && !['redirect', 'discord'].includes(delivery.deliveryMode))) return null;
+  const safe = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '').slice(0, 180);
   const owner = safe(supplier.user?.name || supplier.companyName || 'Stock owner');
   const intendedRecipient = { supplierId: supplier.id, name: owner, email };
   const redirected = delivery.deliveryMode === 'redirect';
-  const to = redirected ? delivery.redirectTo : email;
-  const routingNotice = redirected ? [
+  const discord = delivery.deliveryMode === 'discord';
+  const to = discord ? 'discord-channel' : redirected ? delivery.redirectTo : email;
+  const routingNotice = discord ? [
+    'SINGLE DISCORD TEST CHANNEL — owner delivery is disabled.',
+    `Intended stock owner: ${owner}`,
+    `Intended owner email: ${email}`,
+    `Supplier ID: ${safe(supplier.id)}`,
+    'Actual testing destination: configured Discord channel.',
+    'The intended owner was not contacted. This notification is routed only to the single Discord test channel.',
+    '',
+  ] : redirected ? [
     'REDIRECTED STOCKFLOW EMAIL — owner delivery is disabled.',
     `Intended stock owner: ${owner}`,
     `Intended owner email: ${email}`,
@@ -29,9 +38,9 @@ export function createOwnerNotification({ supplier, mode, subject, lines = [], e
   ] : [];
   return {
     kind: 'notification', mode, to, supplierId: supplier.id, intendedRecipient,
-    subject: `${redirected ? '[REDIRECTED] ' : ''}${safe(subject)}`,
+    subject: `${discord ? '[TEST ROUTE] ' : redirected ? '[REDIRECTED] ' : ''}${safe(subject)}`,
     message: [...routingNotice, `Hello ${owner},`, '', ...lines, '', 'Please review the current records in your StockFlow workspace before taking action.', 'This message uses recorded inventory and order data. It contains no AI predictions.', '', 'StockFlow Operations'].join('\n'),
-    events, deliveryMode: delivery.deliveryMode, deliveryEnabled: delivery.deliveryEnabled,
+    events, deliveryMode: delivery.deliveryMode, deliveryEnabled: delivery.deliveryEnabled, notificationsEnabled: delivery.notificationsEnabled,
   };
 }
 
@@ -98,7 +107,7 @@ export function planNotifications(input) {
     if (!events.length) continue;
     notifications.push(createOwnerNotification({ supplier, mode, subject, lines, events, ...delivery }));
   }
-  return { notifications, skipped, checkedProducts: stock.length, mode, deliveryMode: delivery.deliveryMode, deliveryEnabled: delivery.deliveryEnabled };
+  return { notifications, skipped, checkedProducts: stock.length, mode, deliveryMode: delivery.deliveryMode, deliveryEnabled: delivery.deliveryEnabled, notificationsEnabled: delivery.notificationsEnabled };
 }
 
 export function recordSuccessfulDelivery(state, notification) {

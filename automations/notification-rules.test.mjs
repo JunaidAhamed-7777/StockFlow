@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { clearRecoveredStock, createOwnerNotification, planNotifications, recordSuccessfulDelivery, resolveDeliverySettings } from './notification-rules.mjs';
+import { planMaintenanceNotifications } from './maintenance-rules.mjs';
 
 const NOW = Date.parse('2026-10-15T10:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
@@ -99,7 +100,69 @@ test('shared owner notification formatter enforces routing for additional workfl
   assert.deepEqual(mail.events, [{ key: 'audit:1', at: NOW }]);
   assert.equal(createOwnerNotification({ supplier: supplier({ user: { email: 'owner@stockflow.example.test' } }), mode: 'audit', subject: 'Audit', mailEnabled: true }), null);
   assert.throws(() => createOwnerNotification({ supplier: supplier(), mode: 'audit', subject: 'Audit', deliveryMode: 'redirect', mailEnabled: true }), /redirectTo/);
-  assert.deepEqual(resolveDeliverySettings(), { deliveryMode: 'preview', redirectTo: undefined, mailEnabled: false, deliveryEnabled: false });
+  assert.deepEqual(resolveDeliverySettings(), { deliveryMode: 'preview', redirectTo: undefined, mailEnabled: false, notificationsEnabled: false, deliveryEnabled: false });
+});
+
+test('Discord delivery needs explicit discord mode and strict notificationsEnabled, independently of mailEnabled', () => {
+  for (const notificationsEnabled of [undefined, false, true, 'true', 1, null]) {
+    for (const mailEnabled of [false, true]) {
+      const result = planNotifications(input({ deliveryMode: 'discord', notificationsEnabled, mailEnabled, redirectTo: 'not-an-email' }));
+      assert.equal(result.deliveryEnabled, notificationsEnabled === true);
+      assert.equal(result.notificationsEnabled, notificationsEnabled === true);
+      assert.equal(result.notifications[0].deliveryEnabled, notificationsEnabled === true);
+      assert.equal(result.notifications[0].to, 'discord-channel');
+    }
+  }
+  assert.equal(planNotifications(input({ notificationsEnabled: true, mailEnabled: true })).deliveryEnabled, false);
+  assert.equal(resolveDeliverySettings({ deliveryMode: 'owner', notificationsEnabled: true }).deliveryEnabled, false);
+  const delivery = resolveDeliverySettings({ deliveryMode: 'discord', notificationsEnabled: true });
+  const item = createOwnerNotification({ supplier: supplier(), mode: 'test', subject: 'Test', lines: ['Test detail.'], ...delivery });
+  assert.equal(item.deliveryEnabled, true, 'spreading resolved delivery settings must retain the explicit flag');
+});
+
+test('Discord routes demo-owner attribution to one symbolic channel without any Gmail destination', () => {
+  const item = notification({
+    deliveryMode: 'discord', notificationsEnabled: true, redirectTo: REDIRECT_TO, mailEnabled: true,
+    suppliers: [supplier({ user: { name: 'Supplier Test', email: 'supplier.test@stockflow.local' } })],
+  });
+  assert.equal(item.to, 'discord-channel');
+  assert.equal(item.deliveryMode, 'discord');
+  assert.equal(item.notificationsEnabled, true);
+  assert.match(item.subject, /^\[TEST ROUTE\] StockFlow:/);
+  assert.match(item.message, /^SINGLE DISCORD TEST CHANNEL/);
+  assert.match(item.message, /Intended stock owner: Supplier Test\nIntended owner email: supplier.test@stockflow.local\nSupplier ID: 1/);
+  assert.match(item.message, /Actual testing destination: configured Discord channel/);
+  assert.match(item.message, /intended owner was not contacted/);
+  assert.doesNotMatch(item.message, /junuhammad2@gmail.com|REDIRECTED STOCKFLOW EMAIL/);
+  assert.deepEqual(item.intendedRecipient, { supplierId: 1, name: 'Supplier Test', email: 'supplier.test@stockflow.local' });
+  assert.equal(item.cc, undefined);
+  assert.equal(item.bcc, undefined);
+});
+
+test('maintenance planners retain the Discord flag for administrator audits and owner order updates', () => {
+  const base = input({
+    deliveryMode: 'discord', notificationsEnabled: true,
+    suppliers: [supplier({ user: { email: 'supplier.test@stockflow.local' } })],
+  });
+  const audit = planMaintenanceNotifications({ ...base, mode: 'inventory-audit', categories: [] });
+  assert.equal(audit.notifications.length, 1);
+  assert.equal(audit.notifications[0].deliveryEnabled, true);
+  assert.equal(audit.notifications[0].to, 'discord-channel');
+  assert.equal(audit.notifications[0].intendedRecipient.supplierId, 0);
+  const updates = planMaintenanceNotifications({ ...base, mode: 'order-updates', state: { orderBaseline: { statuses: {} } }, orders: [{ id: 101, status: 'PENDING', orderItems: [{ productId: 11, quantity: 1 }] }] });
+  assert.equal(updates.notifications.length, 1);
+  assert.equal(updates.notifications[0].deliveryEnabled, true);
+  assert.equal(updates.notifications[0].to, 'discord-channel');
+  assert.equal(updates.notifications[0].intendedRecipient.email, 'supplier.test@stockflow.local');
+});
+
+test('Discord stock groups preserve successful-delivery cooldowns and out-of-stock escalation', () => {
+  const state = {};
+  const config = { deliveryMode: 'discord', notificationsEnabled: true, state };
+  const first = notification(config);
+  recordSuccessfulDelivery(state, first);
+  assert.equal(planNotifications(input({ ...config, now: NOW + HOUR })).notifications.length, 0);
+  assert.ok(notification({ ...config, now: NOW + HOUR, products: [product({ quantity: 0 })] }));
 });
 
 test('critical alerts use each product threshold rather than a fixed stock count', () => {
