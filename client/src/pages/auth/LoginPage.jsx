@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.svg";
 import { useAuth } from "../../context/AuthContext";
 import { useApiHealth } from "../../hooks/useApiHealth";
@@ -18,11 +18,12 @@ export function LoginPage() {
   const { login, isAuthenticated, role } = useAuth();
   const apiHealth = useApiHealth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedRole, setSelectedRole] = useState("ADMIN");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [trust, setTrust] = useState(true);
+  const [trust, setTrust] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -41,10 +42,11 @@ export function LoginPage() {
 
   async function onSubmit(event) {
     event.preventDefault();
+    if (saving) return;
     setSaving(true);
     setError("");
     try {
-      const user = await login(email, password, trust);
+      const user = await login(email.trim(), password, trust);
       navigate(portalHome(user.role), { replace: true });
     } catch (err) {
       setError(getErrorMessage(err));
@@ -68,12 +70,12 @@ export function LoginPage() {
                       <span className="font-headline-md text-headline-md text-on-surface tracking-tight flex items-center gap-space-xs">
                         StockFlow <span className="text-secondary font-label-md px-1.5 py-0.5 rounded bg-surface-container-highest">ENTERPRISE</span>
                       </span>
-                      <span className="font-caption text-caption text-on-surface-variant uppercase tracking-wider">High-Density Inventory Mesh</span>
+                      <span className="font-caption text-caption text-on-surface-variant uppercase tracking-wider">Inventory operations</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-space-xs bg-surface-container-lowest px-space-md py-1 rounded-full shadow-sm">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="font-mono-data text-label-sm">v2.4</span>
+                    <span className="font-label-sm text-label-sm">StockFlow</span>
                   </div>
                 </div>
                 <div className="inline-flex items-center gap-space-sm bg-surface-container-highest/80 px-space-base py-space-xs rounded-lg self-start">
@@ -83,9 +85,9 @@ export function LoginPage() {
                   </span>
                 </div>
                 <div className="flex flex-col gap-space-md mt-space-md">
-                  <h1 className="font-display text-display tracking-tight max-w-lg">Autonomous Supply Chain & Multi-DC Stock Orchestration</h1>
+                  <h1 className="font-display text-display tracking-tight max-w-lg">Keep stock moving. Keep teams in sync.</h1>
                   <p className="font-body-md text-body-md text-on-surface-variant max-w-md">
-                    High-throughput inventory synchronization for admin, supplier, and customer operations — backed by the live JavaScript API.
+                    A clear view of your products, inventory, and orders. Focused workspaces for customers, suppliers, and administrators.
                   </p>
                 </div>
               </div>
@@ -114,15 +116,15 @@ export function LoginPage() {
                 <div>
                   <div className="flex items-center justify-between">
                     <h2 className="font-headline-lg text-headline-lg">Sign in to StockFlow</h2>
-                    <span className="font-label-sm text-on-surface-variant bg-surface-container-low px-2 py-1 rounded">Tier-1 Node</span>
                   </div>
-                  <p className="font-body-md text-on-surface-variant">Select your intended portal, then sign in with corporate credentials.</p>
+                  <p className="font-body-md text-on-surface-variant">Sign in to the workspace assigned to your account.</p>
                 </div>
                 <div className="flex p-1 bg-surface-container-low rounded-lg gap-1">
                   {ROLES.map((item) => (
                     <button
                       key={item.id}
                       type="button"
+                      aria-pressed={selectedRole === item.id}
                       onClick={() => setSelectedRole(item.id)}
                       className={`flex-1 py-1.5 px-space-sm font-label-sm rounded text-center transition-all ${selectedRole === item.id ? "bg-surface-container-lowest text-on-surface shadow-sm font-semibold" : "text-on-surface-variant hover:text-on-surface"}`}
                     >
@@ -130,41 +132,36 @@ export function LoginPage() {
                     </button>
                   ))}
                 </div>
-                <div className="flex flex-col gap-space-sm">
-                  <button type="button" disabled className="w-full h-10 px-space-lg bg-surface-container-low text-on-surface-variant font-label-md rounded-lg flex items-center justify-center gap-space-base opacity-60 cursor-not-allowed">
-                    <Icon name="domain_verification" className="text-secondary" size={18} />
-                    SSO / SAML is not configured
-                  </button>
-                </div>
                 <div className="relative flex items-center justify-center my-space-xs">
                   <div className="w-full h-px bg-surface-container-highest" />
                   <span className="absolute bg-surface-container-lowest px-space-md font-caption text-caption uppercase tracking-widest">or sign in with corporate credentials</span>
                 </div>
-                <form className="flex flex-col gap-space-lg" onSubmit={onSubmit}>
+                {location.state?.registered ? <p role="status" className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-space-md">Account created. Sign in with your new credentials.</p> : null}
+                <form className="flex flex-col gap-space-lg" onSubmit={onSubmit} aria-busy={saving}>
                   <div className="flex flex-col gap-space-xs">
                     <label className="font-label-sm" htmlFor="email">Corporate Email</label>
                     <div className="relative flex items-center">
                       <Icon name="badge" className="absolute left-space-md text-on-surface-variant pointer-events-none" size={18} />
-                      <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@organization.com" className="w-full h-9 pl-9 pr-space-sm bg-surface-container-low focus:bg-surface-container-lowest rounded-lg outline-none font-body-sm" />
+                      <input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={254} disabled={saving} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@organization.com" className="w-full h-10 border border-outline-variant pl-9 pr-space-sm bg-surface-container-low focus:bg-surface-container-lowest rounded-lg font-body-sm" />
                     </div>
                   </div>
                   <div className="flex flex-col gap-space-xs">
                     <label className="font-label-sm" htmlFor="password">Password</label>
                     <div className="relative flex items-center">
                       <Icon name="key" className="absolute left-space-md text-on-surface-variant pointer-events-none" size={18} />
-                      <input id="password" type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full h-9 pl-9 pr-9 bg-surface-container-low focus:bg-surface-container-lowest rounded-lg outline-none font-body-sm" />
-                      <button type="button" className="absolute right-space-md text-on-surface-variant" onClick={() => setShowPassword((v) => !v)}>
+                      <input id="password" name="password" autoComplete="current-password" disabled={saving} type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full h-10 border border-outline-variant pl-9 pr-10 bg-surface-container-low focus:bg-surface-container-lowest rounded-lg font-body-sm" />
+                      <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} aria-controls="password" className="absolute right-0 h-10 w-10 flex items-center justify-center text-on-surface-variant" onClick={() => setShowPassword((v) => !v)}>
                         <Icon name={showPassword ? "visibility_off" : "visibility"} size={18} />
                       </button>
                     </div>
                   </div>
                   <label className="flex items-center gap-space-sm cursor-pointer">
                     <input type="checkbox" checked={trust} onChange={(e) => setTrust(e.target.checked)} className="accent-secondary" />
-                    <span className="font-body-sm">Keep this workstation signed in</span>
+                    <span className="font-body-sm">Keep me signed in on this private device</span>
                   </label>
-                  {error ? <p className="font-body-sm text-error">{error}</p> : null}
+                  {error ? <p role="alert" className="font-body-sm text-error">{error}</p> : null}
                   <Button type="submit" className="w-full !h-11" loading={saving}>
-                    Authenticate & Access Portal
+                    Sign in
                     <Icon name="arrow_forward" size={18} />
                   </Button>
                 </form>
