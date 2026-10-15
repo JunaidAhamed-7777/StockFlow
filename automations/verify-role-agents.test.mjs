@@ -39,6 +39,7 @@ test('an editor-style enabled-memory draft is rejected and the original publishe
   for (const plan of ROLE_AGENT_PLANS) {
     const values = fixture(plan);
     values[2].memory.enabled = true;
+    assert.throws(() => verifyPublishedAgent(...values), /configuration differs/);
     values[1].versionId = 'UnpublishedEditorDraft';
     assert.throws(() => verifyPublishedAgent(...values), /configuration differs/);
     values[2].memory.enabled = false;

@@ -63,3 +63,10 @@ All three native configurations passed validation, were published, and were runn
 One short live model session per agent succeeded, each with exactly one successful assigned tool call. n8n recorded **$0.00243550** for ADMIN, **$0.00131280** for SUPPLIER, and **$0.00264525** for CUSTOMER: **$0.00639355 total**, below the user's $10–$15 testing ceiling. No business records or external messages were created by these checks. Actual scheduled recurrence has not been observed through the next due time; enabled task references, schedules, published versions, and manual execution paths were verified.
 
 Private evidence is in `.local/role-agent-verification.json`, `.local/role-agent-tool-verification.json`, and `.local/role-agent-smoke-verification.json`. Session and execution IDs are retained there for inspection in n8n. Configuration verification can be repeated without spending on model calls.
+
+See [the native agent QA report](../docs/QA-ROLE-AGENTS.md) for the 16 October
+scope, installer-repeatability and zero-model-call checks. Repeat the strict
+configuration verifier after inspecting Build/Settings in the native editor:
+unexpected enabled-memory drafts were observed during QA and restored to the
+published setup using **Revert changes**. The cause is tracked in issue #17;
+never publish an unexpected draft just to make current/published versions match.
