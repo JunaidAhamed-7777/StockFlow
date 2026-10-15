@@ -7,6 +7,9 @@ const STATUS_MESSAGES = {
   422: "Some fields are invalid. Please review and try again.",
   500: "The server encountered an error. Please try again later.",
   501: "This capability is not available yet.",
+  502: "StockFlow is temporarily unavailable. Please try again shortly.",
+  503: "StockFlow is temporarily unavailable. Please try again shortly.",
+  504: "The server took too long to respond. Please try again shortly.",
 };
 
 export function getErrorMessage(error) {
@@ -23,6 +26,7 @@ export function getErrorMessage(error) {
   }
 
   const status = error.response.status;
+  if (status >= 500) return STATUS_MESSAGES[status] || STATUS_MESSAGES[500];
   const serverMessage = error.response.data?.message;
   if (serverMessage && typeof serverMessage === "string" && !serverMessage.startsWith("Axios")) {
     return serverMessage;

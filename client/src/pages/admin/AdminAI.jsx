@@ -62,7 +62,7 @@ export function AdminAI() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-space-base">
         {WORKFLOWS.map((workflow) => <Card key={workflow.title} className="p-space-lg flex flex-col gap-space-md"><Icon name={workflow.icon} className="text-secondary" size={24} /><h2 className="font-semibold">{workflow.title}</h2><p className="text-xs font-semibold text-secondary">{workflow.schedule}</p><p className="text-sm text-on-surface-variant">{workflow.description}</p><Badge>Rule-based · no AI cost</Badge></Card>)}
       </div>
-      <Card className="p-space-lg flex flex-col sm:flex-row justify-between gap-space-md sm:items-center"><div><h2 className="font-semibold">Review reorder thresholds</h2><p className="text-sm text-on-surface-variant">Alert rules depend on each product's current quantity and threshold.</p></div><Link to="/admin/inventory" className="text-sm font-semibold text-secondary hover:underline">Open inventory →</Link></Card>
+      <Card className="p-space-lg flex flex-col sm:flex-row justify-between gap-space-md sm:items-center"><div><h2 className="font-semibold">Review reorder thresholds</h2><p className="text-sm text-on-surface-variant">Alert rules depend on each product&apos;s current quantity and threshold.</p></div><Link to="/admin/inventory" className="text-sm font-semibold text-secondary hover:underline">Open inventory →</Link></Card>
       <UnavailableState
         title="AI forecasting is not connected"
         message="Demand forecasts and AI recommendations are not implemented by the current API. No predictions are generated or displayed. Local stock notifications can work independently."

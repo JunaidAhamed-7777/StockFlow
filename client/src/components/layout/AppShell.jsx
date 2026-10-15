@@ -11,13 +11,17 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => readStorage("stockflow.navigation.collapsed", false) === true);
   const location = useLocation();
+  const previousPath = useRef(location.pathname);
   const contentRef = useRef(null);
   const mainRef = useRef(null);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   useEffect(() => {
+    const navigated = previousPath.current !== location.pathname;
+    previousPath.current = location.pathname;
     setMobileOpen(false);
     window.scrollTo(0, 0);
+    if (!navigated) return;
     const frame = requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
   }, [location.pathname]);
