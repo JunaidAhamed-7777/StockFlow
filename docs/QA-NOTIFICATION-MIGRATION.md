@@ -3,9 +3,10 @@
 Status on 16 October 2026: **PENDING live migration**. Authenticated preflight
 confirmed n8n 2.43.6, regular execution mode, single-main deployment and
 `useWorkflowPublicationService: true`. The guard rejected that asynchronous
-publication mode before workflow writes. Its outbox teardown/activation protocol
-is being investigated. No successful application, post-restart verification or
-new delivery result is claimed in this report.
+publication mode before workflow writes. Support for its outbox teardown and
+activation protocol has since been added and tested offline; controlled live
+verification remains pending. No successful application, post-restart
+verification or new delivery result is claimed in this report.
 
 ## Scope and intended policy
 
@@ -43,7 +44,10 @@ not evidence of preservation after migration.
 - Export again after draining. This fresh state supplies cooldowns, order
   baselines, credential bindings and preserved settings, including the benign
   n8n `availableInMCP: false` default. Unexpected changes stop before import.
-- Import and publish reviewed definitions, verify stored graphs and state, then
+- Import all five reviewed definitions and verify their graphs and preserved
+  state while unpublished, before publishing any. Publication reconciliation may
+  resume schedules before restart; no further imports follow the first publish.
+  Record that phase as unverified, publish reviewed definitions, then
   restart n8n and wait for `/healthz/readiness`. Re-export and verify the five
   graphs, settings, pinned data, static data and published versions after restart;
   check published active IDs and activation errors without executing workflows.
@@ -51,6 +55,12 @@ not evidence of preservation after migration.
   produce an enabled status. Failures after workflow writes attempt to unpublish
   and drain the five schedules again, leaving a paused or explicitly unverified
   status. No old definitions or state are restored automatically.
+
+The exact static-data comparisons after publication are deliberately
+conservative. If a resumed scheduled execution changes cooldowns or baselines,
+verification fails closed and leaves the fresh state for inspection; it does
+not overwrite that state with the pre-publication snapshot. Deferred restart
+records a published, unverified state and does not promise schedules stay paused.
 
 The restart is necessary because n8n CLI publication changes database state;
 running single-main cron listeners can outlive an import. The separate readiness
@@ -80,7 +90,7 @@ any previews. Post-migration evidence here must use read-only inspection.
 node --test automations/update-local.test.mjs automations/verify-local.test.mjs automations/notification-maintenance.test.mjs
 ```
 
-**46/46 tests passed**: updater 20, preview verifier 17 and maintenance helper 9.
+**50/50 tests passed**: updater 21, preview verifier 17 and maintenance helper 12.
 These use injected runtime, authentication and transport boundaries. They cover
 version checks, exact five-workflow scope, drain completion/timeout, partial
 deactivation, fresh-state preservation, unrelated workflow preservation,
@@ -90,7 +100,7 @@ that the current local runtime accepts the maintenance API contract.
 
 ## Live evidence still required
 
-Resolve and test the confirmed publication-service mode, then record the
+Verify the confirmed publication-service mode in the controlled runtime, then record the
 controlled command result, restart readiness and activation checks. Compare the original
 and post-migration workflow/credential fingerprints, cooldowns, baselines,
 application collections and native role-agent configuration/cost snapshots.
