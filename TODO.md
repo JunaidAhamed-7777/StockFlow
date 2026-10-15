@@ -16,7 +16,7 @@ This work uses the existing API and Prisma schema. `server/` remains unchanged.
 - [x] Install and publish all three workflows in scheduled preview mode in the running local n8n instance.
 - [x] Verify all three actual n8n HTTP/Code pipelines reach Preview only against 44 products, with zero Gmail/OpenAI node calls.
 - [x] Test automation edge cases without sending test mail to stock owners or spending on OpenAI.
-- [ ] Run TypeScript checks and production build; verify routes, responsive layout, states, and console output.
+- [x] Run TypeScript checks and production build; verify routes, responsive layout, states, and console output.
 - [x] Document completed work, exact local startup steps, and remaining backend/credential limitations.
 - [x] Document every app login and the n8n owner login in ignored `.local/LOGIN-ACCOUNTS.md`.
 - [x] Commit changes in frequent, focused batches.
@@ -27,7 +27,9 @@ This work uses the existing API and Prisma schema. `server/` remains unchanged.
 
 ## Verification
 
-Frontend TypeScript, production build, and lint pass. Seventeen frontend regression cases, 22 notification-rule cases, and four runtime ownership cases pass. Customer desktop/mobile browser checks cover catalog, photos, search, empty states, pagination, quantity validation, cart, profile, and order details. Admin checks cover sign-in, role redirects, supplier directory, inventory, stock modal keyboard focus/restore, product editing, order details, and the automation UI. All n8n previews use the real local API and leave delivery disabled. Additional final startup and supplier browser checks are recorded before handoff.
+Frontend TypeScript, production build, and lint pass; the frontend dependency audit reports zero vulnerabilities. Seventeen frontend regression cases, 22 notification-rule cases, and four runtime ownership cases pass (43 total). Customer desktop/mobile browser checks cover catalog, photos, search, empty states, pagination, quantity validation, cart, profile, and order details. Admin checks cover sign-in, role redirects, supplier directory, inventory, stock modal keyboard focus/restore, product editing, order details, and the automation UI. Supplier checks cover dashboard, own-product catalog, inventory, orders/subtotals, and rejection of another supplier's edit URL. All three n8n previews use the real local API and leave delivery disabled.
+
+Actual app restart and stopped-n8n autostart both pass. Database counts, JWT secret, n8n encryption configuration, encrypted API credential, owner login, and three published workflow IDs are preserved. The pre-existing disposable (`--rm`) n8n container was replaced with a persistent local container using the same preserved data volume. All three workflows reached Preview only again after recovery, with zero email/OpenAI calls. Every one of the 12 app accounts and the n8n owner login appears in the private login document. Final checkout submission and live Gmail delivery were not performed; the current database retains the original single sample order.
 
 ## Known constraints found during inspection
 
