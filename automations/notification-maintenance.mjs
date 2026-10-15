@@ -10,7 +10,8 @@ import { WORKFLOW_MODES } from './verify-local.mjs';
 // controllers/active-workflows.controller.ts. No execution/stop/retry endpoint is used.
 const origin = 'http://localhost:5678';
 const ids = Object.freeze(Object.keys(WORKFLOW_MODES));
-const triggerIds = ['schedule', 'manual-check']; // Fixed IDs emitted by build-workflows.mjs.
+// DiscordV2 exposes a webhook handler even for sendLegacy; n8n 2.43.6 classifies it as trigger-like.
+const triggerIds = ['schedule', 'manual-check', 'send-discord-notification']; // Fixed IDs emitted by build-workflows.mjs.
 const safeId = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 class MaintenanceError extends Error {}
 const fail = (message) => { throw new MaintenanceError(message); };

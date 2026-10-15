@@ -32,7 +32,7 @@ function fixture(overrides = {}) {
     if (publicationId) {
       const workflow = state.workflows.get(publicationId);
       return response(overrides.publication?.(publicationId, state) ?? (workflow.active
-        ? { status: 'published', liveVersionId: workflow.activeVersionId, pendingVersionId: null, triggers: ['schedule', 'manual-check'].map((nodeId) => ({ nodeId, status: 'activated', errorMessage: null })) }
+        ? { status: 'published', liveVersionId: workflow.activeVersionId, pendingVersionId: null, triggers: ['schedule', 'manual-check', 'send-discord-notification'].map((nodeId) => ({ nodeId, status: 'activated', errorMessage: null })) }
         : { status: 'not_published', liveVersionId: null, pendingVersionId: null, triggers: [] }));
     }
     const workflow = url.pathname.match(/^\/rest\/workflows\/([A-Za-z0-9_-]+)(\/deactivate)?$/);
@@ -167,15 +167,16 @@ test('outbox teardown timeout/malformed/failed states remain unverified and neve
   await assert.rejects(absent.helper.quiesce(absent.expected())); assert.deepEqual(absent.state.deactivated, []);
 });
 
-test('outbox activation waits for settled exact schedule/manual trigger registration', async () => {
+test('outbox activation requires exact schedule/manual/Discord trigger registration and rejects an unexpected fourth row', async () => {
   const f = fixture({ outbox: true, publication: (id, state) => state.milliseconds === 0
     ? { status: 'in_progress', liveVersionId: null, pendingVersionId: `version-${id}`, triggers: [] } : undefined });
   assert.deepEqual(await f.helper.verifyActive(ids), { activeCount: 5, activationErrors: 0 });
   assert.equal(f.state.milliseconds, 10);
-  const expected = { status: 'published', liveVersionId: `version-${ids[0]}`, pendingVersionId: null, triggers: ['schedule', 'manual-check'].map((nodeId) => ({ nodeId, status: 'activated', errorMessage: null })) };
+  const expected = { status: 'published', liveVersionId: `version-${ids[0]}`, pendingVersionId: null, triggers: ['schedule', 'manual-check', 'send-discord-notification'].map((nodeId) => ({ nodeId, status: 'activated', errorMessage: null })) };
   const invalid = [
     { ...expected, liveVersionId: 'other-version' }, { ...expected, pendingVersionId: 'pending-version' },
-    { ...expected, triggers: expected.triggers.slice(0, 1) },
+    { ...expected, triggers: expected.triggers.slice(0, 2) },
+    { ...expected, triggers: [...expected.triggers.slice(0, 2), { nodeId: 'unrelated-trigger', status: 'activated', errorMessage: null }] },
     { ...expected, triggers: [...expected.triggers, { nodeId: 'unrelated-trigger', status: 'activated', errorMessage: null }] },
     { ...expected, triggers: [expected.triggers[0], expected.triggers[0]] },
     { ...expected, status: 'partial', triggers: [expected.triggers[0], { nodeId: 'manual-check', status: 'failed', errorMessage: 'OFFLINE_PRIVATE_ERROR' }] },
