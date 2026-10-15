@@ -28,6 +28,10 @@ protected from engine replacement; an invalid client requires stopping it
 before generation. Offline regressions cover the actual postinstall placeholder
 and valid artifacts. These are setup-contract tests, not a clean-host run.
 
+All 36 runtime/lock tests passed. The read-only artifact check accepted the
+actual generated client, and repeated start on the retained workspace completed
+successfully with byte-identical runtime markers (including process identities).
+
 ## Completion run on a supplied disposable Windows host
 
 Follow `LOCAL-DEVELOPMENT.md` from a fresh clone and `npm install`. Before start,
