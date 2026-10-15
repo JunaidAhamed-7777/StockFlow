@@ -32,7 +32,7 @@ if (!account) {
 const login = await fetch('http://localhost:3001/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: account.email, password: account.password }), signal: AbortSignal.timeout(15000) });
 if (!login.ok || (await login.json()).data?.user?.role !== 'ADMIN') throw new Error('Automation account cannot read the required local inventory.');
 const listing = docker(['exec', 'n8n', 'n8n', 'list:workflow']);
-const workflowIds = ['StockFlowCritical01', 'StockFlowDigest01', 'StockFlowOrders01'];
+const workflowIds = ['StockFlowCritical01', 'StockFlowDigest01', 'StockFlowOrders01', 'StockFlowAudit01', 'StockFlowUpdates01'];
 const missing = workflowIds.filter((id) => !listing.includes(id));
 const activeIds = docker(['exec', 'n8n', 'n8n', 'list:workflow', '--active=true', '--onlyId']);
 if (missing.length) {
@@ -46,7 +46,7 @@ if (missing.length) {
     docker(['exec', '--user', 'root', 'n8n', 'node', '-e', "require('fs').rmSync('/tmp/stockflow-api-login.json',{force:true})"]);
   }
 }
-for (const file of ['stockflow-low-stock.json', 'stockflow-daily-digest.json', 'stockflow-stale-orders.json']) {
+for (const file of ['stockflow-low-stock.json', 'stockflow-daily-digest.json', 'stockflow-stale-orders.json', 'stockflow-inventory-audit.json', 'stockflow-order-updates.json']) {
   const workflow = JSON.parse(readFileSync(path.join(root, 'automations/workflows', file), 'utf8'));
   if (!missing.includes(workflow.id)) {
     if (!activeIds.includes(workflow.id)) { docker(['exec', 'n8n', 'n8n', 'publish:workflow', `--id=${workflow.id}`]); console.log(`Published existing preview without resetting its state: ${workflow.name}`); }
@@ -61,5 +61,6 @@ for (const file of ['stockflow-low-stock.json', 'stockflow-daily-digest.json', '
   } finally { docker(['exec', '--user', 'root', 'n8n', 'node', '-e', `require('fs').rmSync('/tmp/${file}',{force:true})`]); }
 }
 if (missing.length || workflowIds.some(id => !activeIds.includes(id))) docker(['restart', 'n8n']);
-writeFileSync(path.join(local, 'automation-status.json'), JSON.stringify({ installedAt: new Date().toISOString(), workflows: workflowIds, deliveryEnabled: false, reason: 'Gmail OAuth credential is not connected. Workflows run scheduled previews and skip reserved demo addresses.', openAiCalls: 0 }, null, 2));
-console.log('n8n workflows installed locally. Gmail delivery remains disabled; no OpenAI calls or emails were made.');
+const previousStatus = existsSync(path.join(local, 'automation-status.json')) ? JSON.parse(readFileSync(path.join(local, 'automation-status.json'), 'utf8')) : {};
+writeFileSync(path.join(local, 'automation-status.json'), JSON.stringify({ ...previousStatus, installedAt: new Date().toISOString(), workflows: workflowIds, note: 'New templates start in preview; existing workflow delivery settings were preserved. Use update-local.mjs to apply source changes.', openAiCalls: 0 }, null, 2));
+console.log('n8n workflows installed locally. New workflows start in preview; existing delivery settings were preserved. No test mail or OpenAI calls made.');

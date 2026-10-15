@@ -43,7 +43,7 @@ if (enableLowStock) {
   const credential = credentials?.find(value => value.id === credentialId && value.type === 'gmailOAuth2');
   const data = credential?.data;
   const scopes = String(data?.enabledScopes || '').trim().split(/\s+/);
-  if (!data?.customScopes || scopes.length !== 1 || scopes[0] !== 'https://www.googleapis.com/auth/gmail.send' || !data.oauthTokenData?.access_token || !data.oauthTokenData?.refresh_token) throw new Error('Gmail must be connected with only gmail.send and offline refresh access before delivery can be enabled.');
+  if (data?.customScopes !== true || scopes.length !== 1 || scopes[0] !== 'https://www.googleapis.com/auth/gmail.send' || !data.oauthTokenData?.access_token || !data.oauthTokenData?.refresh_token) throw new Error('Gmail must be connected with only gmail.send and offline refresh access before delivery can be enabled.');
   gmail = { id: credential.id, name: credential.name };
 }
 const prepared = sources.map(source => {
@@ -65,7 +65,7 @@ writeFileSync(path.join(backup, 'previous-workflows.json'), JSON.stringify(curre
 for (const workflow of prepared) {
   const importPath = `/tmp/stockflow-import-${batch}.json`;
   try {
-    docker(['exec', 'n8n', 'node', '-e', `require('fs').writeFileSync('${importPath}',require('fs').readFileSync(0),{mode:384})`], JSON.stringify(workflow));
+    docker(['exec', '-i', 'n8n', 'node', '-e', `require('fs').writeFileSync('${importPath}',require('fs').readFileSync(0),{mode:384})`], JSON.stringify(workflow));
     docker(['exec', 'n8n', 'n8n', 'import:workflow', `--input=${importPath}`]);
     docker(['exec', 'n8n', 'n8n', 'publish:workflow', `--id=${workflow.id}`]);
   } finally { docker(['exec', 'n8n', 'node', '-e', `require('fs').rmSync('${importPath}',{force:true})`]); }
