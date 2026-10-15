@@ -13,13 +13,13 @@ export const WORKFLOW_MODES = Object.freeze({
   StockFlowUpdates01: 'order-updates',
 });
 
-/** Exclude UI placement and attached Gmail credential IDs; include every executable node and behavior. */
+/** Exclude UI placement and the Discord webhook credential reference; fingerprint all executable behavior. */
 export function previewWorkflowFingerprint(workflow) {
   const fingerprint = {
     id: workflow.id,
     nodes: workflow.nodes.filter((node) => node.type !== 'n8n-nodes-base.stickyNote').map((node) => ({
       id: node.id, name: node.name, type: node.type, typeVersion: node.typeVersion, parameters: node.parameters,
-      credentials: node.type === 'n8n-nodes-base.gmail' ? null : node.credentials || null,
+      credentials: node.name === 'Send Discord notification' && node.type === 'n8n-nodes-base.discord' ? null : node.credentials || null,
       disabled: node.disabled === true, executeOnce: node.executeOnce === true,
       alwaysOutputData: node.alwaysOutputData === true, continueOnFail: node.continueOnFail === true,
       retryOnFail: node.retryOnFail === true, maxTries: node.maxTries ?? null, waitBetweenTries: node.waitBetweenTries ?? null,
@@ -55,24 +55,26 @@ export function assertSafePreviewSource(workflow, mode) {
     if (matching.length !== 1) refuse();
     return matching[0];
   };
-  const destination = 'junuhammad2@gmail.com';
-  const settings = `return [{json: {apiBaseUrl: 'http://host.docker.internal:3001/api', mode: '${mode}', deliveryMode: 'redirect', redirectTo: '${destination}', mailEnabled: false, criticalRatio: 0.5, reminderHours: 24, auditRecipientEmail: 'admin.test@stockflow.local'}}];`;
+  const destination = 'discord-channel';
+  const settings = `return [{json: {apiBaseUrl: 'http://host.docker.internal:3001/api', mode: '${mode}', deliveryMode: 'discord', notificationsEnabled: false, criticalRatio: 0.5, reminderHours: 24, auditRecipientEmail: 'admin.test@stockflow.local'}}];`;
   const settingsNode = find('Settings');
   if (settingsNode.type !== 'n8n-nodes-base.code' || settingsNode.parameters?.jsCode !== settings) refuse();
-  const gmail = find('Send owner Gmail');
-  const transport = { authentication: 'oAuth2', resource: 'message', operation: 'send', sendTo: destination, subject: '={{ $json.subject }}', emailType: 'text', message: '={{ $json.message }}', options: { appendAttribution: false } };
-  if (gmail.type !== 'n8n-nodes-base.gmail' || JSON.stringify(gmail.parameters) !== JSON.stringify(transport)) refuse();
+  const discord = find('Send Discord notification');
+  const transport = { authentication: 'webhook', operation: 'sendLegacy', content: '={{ $json.discordContent }}', options: { wait: true, flags: ['SUPPRESS_EMBEDS'], tts: false } };
+  if (discord.type !== 'n8n-nodes-base.discord' || discord.typeVersion !== 2 || JSON.stringify(discord.parameters) !== JSON.stringify(transport) || discord.retryOnFail !== false) refuse();
   const guard = find('Delivery enabled');
-  const expectedExpression = `={{ $json.kind === 'notification' && $json.deliveryEnabled === true && $json.deliveryMode === 'redirect' && $json.to === '${destination}' && typeof $json.intendedRecipient?.email === 'string' && $json.intendedRecipient.email.length > 0 && typeof $json.intendedRecipient.name === 'string' && Number.isSafeInteger($json.intendedRecipient.supplierId) }}`;
+  const expectedExpression = `={{ $json.kind === 'notification' && $json.deliveryEnabled === true && $json.deliveryMode === 'discord' && $json.to === '${destination}' && typeof $json.intendedRecipient?.email === 'string' && $json.intendedRecipient.email.length > 0 && typeof $json.intendedRecipient.name === 'string' && Number.isSafeInteger($json.intendedRecipient.supplierId) }}`;
   const conditions = guard.parameters?.conditions;
   if (guard.type !== 'n8n-nodes-base.if' || conditions?.conditions?.length !== 1 || conditions.combinator !== 'and' || conditions.conditions[0].leftValue !== expectedExpression || conditions.conditions[0].operator?.type !== 'boolean' || conditions.conditions[0].operator?.operation !== 'true') refuse();
-  if (workflow.nodes.some((node) => node.disabled === true) || workflow.settings?.errorWorkflow) refuse();
+  const incoming = (target) => Object.entries(workflow.connections || {}).flatMap(([from, value]) => (value.main || []).flatMap((branch, index) => (branch || []).filter(({ node }) => node === target).map(() => `${from}:${index}`)));
+  if (JSON.stringify(incoming('Prepare Discord message')) !== JSON.stringify(['Delivery enabled:0']) || JSON.stringify(incoming('Send Discord notification')) !== JSON.stringify(['Prepare Discord message:0']) || JSON.stringify(incoming('Remember successful delivery')) !== JSON.stringify(['Send Discord notification:0'])) refuse();
+  if (workflow.nodes.some((node) => node.disabled === true || node.type === 'n8n-nodes-base.gmail') || workflow.nodes.filter((node) => node.type === 'n8n-nodes-base.discord').length !== 1 || workflow.settings?.errorWorkflow) refuse();
 }
 
 export function assertMatchingPreviewWorkflow(expected, actual) {
   assertSafePreviewSource(expected, WORKFLOW_MODES[expected.id]);
   if (hashPreviewWorkflow(actual) !== hashPreviewWorkflow(expected)) {
-    throw new Error(`Refusing to test ${expected.id}: executable nodes, mail transport, code, settings, pinned data, or routing differ from the disabled-delivery source. No workflow executed.`);
+    throw new Error(`Refusing to test ${expected.id}: executable nodes, notification transport, code, settings, pinned data, or routing differ from the disabled-delivery source. No workflow executed.`);
   }
 }
 
@@ -86,7 +88,7 @@ function inspectInstalledWorkflow(expected) {
   let actual;
   try { actual = inspection.status === 0 ? JSON.parse(inspection.stdout) : null; } catch { /* Never echo potentially sensitive process output. */ }
   if (!actual || actual.fingerprint !== hashPreviewWorkflow(expected)) {
-    throw new Error(`Refusing to test ${expected.id}: executable nodes, mail transport, code, settings, pinned data, or routing differ from the disabled-delivery source. No workflow executed.`);
+    throw new Error(`Refusing to test ${expected.id}: executable nodes, notification transport, code, settings, pinned data, or routing differ from the disabled-delivery source. No workflow executed.`);
   }
 }
 
@@ -128,16 +130,17 @@ export function verifyLocalPreviews() {
     const data = run?.data?.resultData || run?.resultData || run?.data || run;
     const runs = data?.runData || {};
     const preview = runs['Preview only']?.flatMap((entry) => entry.data?.main?.flat() || []).map(summarizePreviewItem) || [];
-    const emailCalls = runs['Send owner Gmail']?.length || 0;
-    const report = { id, success: result.status === 0 && !data?.error && preview.length > 0 && emailCalls === 0 && preview.every((entry) => entry.deliveryEnabled === false), lastNode: data?.lastNodeExecuted, preview, emailCalls, openAiCalls: 0 };
+    const notificationCalls = runs['Send Discord notification']?.length || 0;
+    const gmailCalls = Object.entries(runs).filter(([name]) => /gmail/i.test(name)).reduce((total, [, entries]) => total + (entries?.length || 0), 0);
+    const report = { id, success: result.status === 0 && !data?.error && preview.length > 0 && notificationCalls === 0 && gmailCalls === 0 && preview.every((entry) => entry.deliveryEnabled === false), lastNode: data?.lastNodeExecuted, preview, notificationCalls, gmailCalls, openAiCalls: 0 };
     if (!report.success) report.error = 'CLI verification did not finish safely at the preview node. Raw credential-bearing output was withheld.';
     reports.push(report);
     console.log(JSON.stringify(report));
-    if (emailCalls > 0) break;
+    if (notificationCalls > 0 || gmailCalls > 0) break;
   }
   mkdirSync(path.join(root, '.local'), { recursive: true });
   writeFileSync(path.join(root, '.local/automation-verification.json'), JSON.stringify({ checkedAt: new Date().toISOString(), reports }, null, 2));
-  if (reports.some((report) => !report.success || report.emailCalls !== 0)) process.exitCode = 1;
+  if (reports.some((report) => !report.success || report.notificationCalls !== 0 || report.gmailCalls !== 0)) process.exitCode = 1;
   return reports;
 }
 
