@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { Pagination } from "../../components/ui/Pagination";
 import { getSuppliers } from "../../services/discovery.service";
 import { listProducts } from "../../services/product.service";
 import { getErrorMessage } from "../../utils/errors";
@@ -17,43 +19,54 @@ export function AdminSuppliers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState("");
+  const { filters, setFilters } = useListFilters({ search: "" });
+  const [search, setSearch] = useState(filters.search);
+  const requestId = useRef(0);
+  const filtered = suppliers.filter((item) => `${item.companyName} ${item.user?.name || ""} ${item.user?.email || ""}`.toLowerCase().includes(filters.search.toLowerCase()));
+  const pagination = usePaginatedRows(filtered, { ready: !loading && !error });
+  useEffect(() => { setSearch(filters.search); }, [filters.search]);
 
   async function load() {
+    const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
       const [rows, catalog] = await Promise.all([getSuppliers(), listProducts()]);
+      if (activeRequest !== requestId.current) return;
       setSuppliers(rows || []);
       setProducts(catalog || []);
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
+    return () => { requestId.current += 1; };
   }, []);
 
   if (loading) return <PageSkeleton />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  const filtered = suppliers.filter((item) => `${item.companyName} ${item.user?.name || ""} ${item.user?.email || ""}`.toLowerCase().includes(search.trim().toLowerCase()));
-
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Procurement</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Suppliers</span></>}
-        title="Supplier network"
+        title="Suppliers"
         description="Find your suppliers, review their contact details, and see catalog coverage."
       />
-      <Card className="p-space-base"><ToolbarSearch value={search} onChange={setSearch} placeholder="Search company, contact, or email" /></Card>
+      <Card className="p-space-base">
+        <form className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search suppliers" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
+          <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search company, contact, or email" label="Search suppliers" />
+          <Button type="submit">Search</Button>
+        </form>
+      </Card>
       <Card>
         <Table
-          rows={filtered}
-          empty={<EmptyState icon="local_shipping" title="No suppliers found" description={search ? "Try a different company name or email." : "Suppliers appear here after registration."} />}
+          rows={pagination.rows}
+          caption="Suppliers"
+          empty={<EmptyState icon="local_shipping" title="No suppliers found" description={filters.search ? "Try a different company name or email." : "Suppliers appear here after registration."} />}
           columns={[
             { key: "companyName", header: "Company" },
             { key: "contactNumber", header: "Contact", render: (row) => row.contactNumber || "—" },
@@ -63,8 +76,9 @@ export function AdminSuppliers() {
             { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View ${row.companyName}`} onClick={() => setSelected(row)}>View</Button> },
           ]}
         />
+        <Pagination {...pagination} onPageChange={pagination.setPage} label="Suppliers" />
       </Card>
-      <Modal open={Boolean(selected)} title={selected?.companyName || "Supplier"} onClose={() => setSelected(null)}>
+      <Modal open={Boolean(selected)} title={selected?.companyName || "Supplier"} onClose={() => setSelected(null)} footer={<Button variant="outline" onClick={() => setSelected(null)}>Close</Button>}>
         {selected ? (
           <dl className="space-y-space-sm font-body-sm">
             <div className="flex justify-between"><dt className="text-on-surface-variant">Supplier ID</dt><dd className="font-mono-data">{selected.id}</dd></div>

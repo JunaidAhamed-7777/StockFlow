@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePaginatedRows } from "../../hooks/useListState";
+import { Pagination } from "../../components/ui/Pagination";
 import { getStockTransactions } from "../../services/stock.service";
 import { getErrorMessage, isNotImplemented } from "../../utils/errors";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -16,33 +18,38 @@ export function AdminStockTransactions() {
   const [unavailable, setUnavailable] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
+  const pagination = usePaginatedRows(rows, { ready: !loading && !error && !unavailable });
 
   async function load() {
+    const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     setUnavailable("");
     try {
       const data = await getStockTransactions();
+      if (activeRequest !== requestId.current) return;
       setRows(Array.isArray(data) ? data : []);
     } catch (err) {
+      if (activeRequest !== requestId.current) return;
       if (isNotImplemented(err)) {
         setUnavailable(getErrorMessage(err));
       } else {
         setError(getErrorMessage(err));
       }
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
+    return () => { requestId.current += 1; };
   }, []);
 
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Governance</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Audit ledger</span></>}
         title="Stock transactions"
         description="Review the history of inventory receipts, issues, and manual adjustments when transaction history is available."
       />
@@ -56,7 +63,8 @@ export function AdminStockTransactions() {
       ) : !loading && !error ? (
         <Card>
           <Table
-            rows={rows}
+            rows={pagination.rows}
+            caption="Stock transactions"
             empty={<EmptyState icon="swap_horiz" title="No transactions recorded" />}
             columns={[
               { key: "id", header: "ID", render: (row) => <span className="font-mono-data">{row.id}</span> },
@@ -66,6 +74,7 @@ export function AdminStockTransactions() {
               { key: "createdAt", header: "When", render: (row) => formatDate(row.createdAt) },
             ]}
           />
+          <Pagination {...pagination} onPageChange={pagination.setPage} label="Transactions" />
         </Card>
       ) : null}
     </>

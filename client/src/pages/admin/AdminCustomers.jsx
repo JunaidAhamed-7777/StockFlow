@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { Pagination } from "../../components/ui/Pagination";
+import { Button } from "../../components/ui/Button";
 import { listOrders } from "../../services/order.service";
 import { getDashboard } from "../../services/dashboard.service";
 import { getErrorMessage } from "../../utils/errors";
@@ -16,24 +19,30 @@ export function AdminCustomers() {
   const [metrics, setMetrics] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const { filters, setFilters } = useListFilters({ search: "" });
+  const [search, setSearch] = useState(filters.search);
+  const requestId = useRef(0);
+  useEffect(() => { setSearch(filters.search); }, [filters.search]);
 
   async function load() {
+    const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
       const [dash, rows] = await Promise.all([getDashboard(), listOrders()]);
+      if (activeRequest !== requestId.current) return;
       setMetrics(dash.metrics);
       setOrders(rows || []);
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
+    return () => { requestId.current += 1; };
   }, []);
 
   const customers = useMemo(() => {
@@ -58,28 +67,33 @@ export function AdminCustomers() {
     }
     return Array.from(map.values());
   }, [orders]);
+  const filtered = customers.filter((item) => `${item.name} ${item.email}`.toLowerCase().includes(filters.search.toLowerCase()));
+  const pagination = usePaginatedRows(filtered, { ready: !loading && !error });
 
   if (loading) return <PageSkeleton />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  const filtered = customers.filter((item) => `${item.name} ${item.email}`.toLowerCase().includes(search.trim().toLowerCase()));
-
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Sales</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Customers</span></>}
-        title="Customer directory"
+        title="Customers"
         description="Customers with purchase history appear below. The registered count includes customers who have not placed an order."
       />
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-space-base">
         <StatCard label="Registered customers" value={metrics?.totalCustomers ?? 0} hint="All registered customer accounts" icon="groups" />
         <StatCard label="Customers with orders" value={customers.length} hint="Customers with recorded purchases" icon="receipt_long" />
       </section>
-      <Card className="p-space-base"><ToolbarSearch value={search} onChange={setSearch} placeholder="Search customers by name or email" /></Card>
+      <Card className="p-space-base">
+        <form className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search customers" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
+          <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search name or email" label="Search customers" />
+          <Button type="submit">Search</Button>
+        </form>
+      </Card>
       <Card>
         <Table
-          rows={filtered}
-          empty={<EmptyState icon="groups" title={search ? "No matching customers" : "No customers with recorded orders"} description={search ? "Try another name or email." : "Customer details appear here after their first order."} />}
+          rows={pagination.rows}
+          caption="Customers with recorded orders"
+          empty={<EmptyState icon="groups" title={filters.search ? "No matching customers" : "No customers with recorded orders"} description={filters.search ? "Try another name or email." : "Customer details appear here after their first order."} />}
           columns={[
             { key: "name", header: "Name" },
             { key: "email", header: "Email" },
@@ -88,6 +102,7 @@ export function AdminCustomers() {
             { key: "lastOrderAt", header: "Last order", render: (row) => formatDate(row.lastOrderAt) },
           ]}
         />
+        <Pagination {...pagination} onPageChange={pagination.setPage} label="Customers" />
       </Card>
     </>
   );
