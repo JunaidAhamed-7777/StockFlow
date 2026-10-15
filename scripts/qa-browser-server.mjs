@@ -5,7 +5,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { originalProductPhotos } from "./data/demo-catalog.mjs";
-import { productPage, orderPage, supplierPage } from "./qa-paged-fixtures.mjs";
+import { productPage, orderPage, supplierPage, orderDetail } from "./qa-paged-fixtures.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultDist = path.resolve(here, "../client/dist");
@@ -180,8 +180,7 @@ export function createQAServer({ distRoot = defaultDist, config = {} } = {}) {
           return ok(role === "SUPPLIER" ? scopedOrders.map((order) => ({ ...order, orderItems: order.orderItems.filter((item) => item.product.supplierId === 1) })) : scopedOrders);
         }
         if (/^\/api\/orders\/\d+$/.test(pathname)) {
-          const order = scopedOrders.find((row) => row.id === Number(pathname.split("/").at(-1)));
-          return order ? ok(order) : send(404, { message: "Order not found." });
+          return ok(orderDetail(fixtures, Number(pathname.split("/").at(-1)), scope));
         }
         if (pathname === "/api/stock/low-stock") return ok(products.filter((row) => row.quantity <= row.lowStockThreshold && (role !== "SUPPLIER" || row.supplierId === 1)));
         if (pathname === "/api/stock/transactions") return send(501, { success: false, code: "NOT_IMPLEMENTED", message: "Stock transaction listing not implemented yet." });

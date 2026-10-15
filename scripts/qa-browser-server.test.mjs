@@ -111,10 +111,14 @@ test("loopback synthetic server isolates writes, filters fixtures, and sanitizes
     assert.ok(supplierOrders.length > 0);
     assert.ok(supplierOrders.every((order) => order.orderItems.every((item) => item.product.supplierId === 1)));
     const detail = (await (await request(`/api/orders/${supplierOrders[0].id}`, { headers: { Authorization: "Bearer synthetic-qa-SUPPLIER" } })).json()).data;
-    assert.equal(detail.orderItems.length, 3);
-    assert.ok(detail.orderItems.some((item) => item.product.supplierId !== 1));
-    assert.equal(detail.hasOtherSuppliers, undefined);
+    assert.equal(detail.orderItems.length, 1);
+    assert.ok(detail.orderItems.every((item) => item.product.supplierId === 1));
+    assert.equal(detail.hasOtherSuppliers, true);
     assert.equal(detail.totalAmount, detail.orderItems.reduce((sum, item) => sum + item.quantity * item.price, 0));
+    assert.deepEqual(Object.keys(detail.customer).sort(), ["email", "id", "name", "truncatedFields"]);
+    const adminDetail = (await (await request(`/api/orders/${detail.id}`, { headers: auth })).json()).data;
+    assert.equal(adminDetail.orderItems.length, 3);
+    assert.ok(detail.totalAmount < adminDetail.totalAmount);
   });
 
   await t.test("structured paging keys fail before authentication and empty sort values fail closed", async () => {
