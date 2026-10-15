@@ -1,8 +1,8 @@
 export function Loading({ label = "Loading…" }) {
   return (
     <div role="status" className="flex flex-col items-center justify-center py-space-3xl gap-space-sm text-on-surface-variant">
-      <span aria-hidden="true" className="material-symbols-outlined animate-spin text-secondary text-[28px]">progress_activity</span>
-      <p className="font-label-sm text-label-sm uppercase tracking-wider">{label}</p>
+      <span aria-hidden="true" className="material-symbols-outlined animate-spin text-secondary text-2xl">progress_activity</span>
+      <p className="font-label-sm text-label-sm">{label}</p>
     </div>
   );
 }

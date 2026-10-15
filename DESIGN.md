@@ -15,6 +15,7 @@ colors:
   cobalt-hover: "#1D4ED8"
   selected: "#EFF6FF"
   selected-text: "#1E40AF"
+  text-selection: "#DBEAFE"
   danger: "#B91C1C"
   danger-surface: "#FEF2F2"
   danger-text: "#991B1B"
@@ -31,6 +32,10 @@ typography:
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
     fontSize: "12px"
     lineHeight: "1.5"
+  icons:
+    fontFamily: "Material Symbols Outlined"
+    fontSize: "18px"
+    lineHeight: "1"
 rounded:
   DEFAULT: "0.25rem"
   lg: "0.375rem"
@@ -151,6 +156,8 @@ Light is the supported theme. Do not present a theme switch without a complete a
 ## Typography
 
 Use Hanken Grotesk for headings, body, controls, and tables, with the system stack in the token above. Use the monospaced stack only for SKUs, record identifiers, and technical values. Quantities and money use tabular figures and right alignment when compared in columns.
+
+Material Symbols Outlined supplies the existing icon family; it is not a text face. Shared Icon controls its optical size. Form controls use 16px on coarse-pointer devices to retain readable entry without browser zoom. Text selection uses the documented pale blue selection color with ink text.
 
 - Page heading: 24px, weight 700, 32px line height.
 - Section heading: 16–18px, weight 600, 24–26px line height.

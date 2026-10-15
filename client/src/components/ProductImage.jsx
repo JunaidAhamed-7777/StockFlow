@@ -18,7 +18,7 @@ export function ProductImage({ product, className = "", showCredit = false }) {
           <span className="text-xs">Product photograph unavailable</span>
         </div>
       )}
-      {photo && !failed ? <figcaption className="absolute bottom-0 inset-x-0 bg-slate-900/80 px-3 py-1 text-[11px] text-white">
+      {photo && !failed ? <figcaption className="absolute bottom-0 inset-x-0 bg-slate-900/80 px-3 py-1 text-xs text-white">
         Illustrative photo{showCredit ? <> · <a href={photo.creditUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{photo.creditName}</a></> : null}
       </figcaption> : null}
     </figure>
