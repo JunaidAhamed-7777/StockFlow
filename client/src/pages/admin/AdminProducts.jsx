@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { Pagination } from "../../components/ui/Pagination";
 import { deleteProduct, listProducts } from "../../services/product.service";
 import { getCategories, getSuppliers } from "../../services/discovery.service";
 import { getErrorMessage } from "../../utils/errors";
@@ -18,12 +20,11 @@ import { Icon } from "../../components/ui/Icon";
 
 export function AdminProducts() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const initialSearch = new URLSearchParams(location.search).get("search") || "";
-  const [search, setSearch] = useState(initialSearch);
-  const [category, setCategory] = useState("");
-  const [supplier, setSupplier] = useState("");
-  const [lowStock, setLowStock] = useState(false);
+  const { filters, setFilters } = useListFilters({ search: "", category: "", supplier: "", lowStock: "" });
+  const [search, setSearch] = useState(filters.search);
+  const [category, setCategory] = useState(filters.category);
+  const [supplier, setSupplier] = useState(filters.supplier);
+  const [lowStock, setLowStock] = useState(filters.lowStock === "1");
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -31,24 +32,29 @@ export function AdminProducts() {
   const [error, setError] = useState("");
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [message, setMessage] = useState("");
+  const [loadedFilterKey, setLoadedFilterKey] = useState("");
   const requestId = useRef(0);
+  const filterKey = JSON.stringify(filters);
+  const pagination = usePaginatedRows(products, { ready: !loading && !error && loadedFilterKey === filterKey });
 
-  async function load(searchOverride) {
+  async function load() {
     const activeRequest = ++requestId.current;
-    const searchValue = (typeof searchOverride === "string" ? searchOverride : search).trim();
     setLoading(true);
     setError("");
     try {
       const params = {};
-      if (searchValue) params.search = searchValue;
-      if (category) params.category = category;
-      if (supplier) params.supplier = supplier;
+      if (filters.search) params.search = filters.search;
+      if (filters.category) params.category = filters.category;
+      if (filters.supplier) params.supplier = filters.supplier;
       const [rows, cats, sups] = await Promise.all([listProducts(params), getCategories(), getSuppliers()]);
       if (activeRequest !== requestId.current) return;
       setCategories(cats || []);
       setSuppliers(sups || []);
       const catalog = enrichProducts(rows || [], cats || [], sups || []);
-      setProducts(lowStock ? catalog.filter((item) => stockStatus(item) !== "IN") : catalog);
+      setProducts(filters.lowStock === "1" ? catalog.filter((item) => stockStatus(item) !== "IN") : catalog);
+      setLoadedFilterKey(filterKey);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -57,11 +63,13 @@ export function AdminProducts() {
   }
 
   useEffect(() => {
-    const next = new URLSearchParams(location.search).get("search") || "";
-    setSearch(next);
-    load(next);
+    setSearch(filters.search);
+    setCategory(filters.category);
+    setSupplier(filters.supplier);
+    setLowStock(filters.lowStock === "1");
+    load();
     return () => { requestId.current += 1; };
-  }, [location.search]);
+  }, [filters.search, filters.category, filters.supplier, filters.lowStock]);
 
   const columns = useMemo(
     () => [
@@ -77,8 +85,8 @@ export function AdminProducts() {
         header: "",
         render: (row) => (
           <div className="flex justify-end gap-space-xs">
-            <Button variant="outline" onClick={() => navigate(`/admin/products/${row.id}/edit`)}>Edit</Button>
-            <Button variant="danger" onClick={() => setPendingDelete(row)}>Delete</Button>
+            <Button variant="outline" aria-label={`Edit ${row.name}`} onClick={() => navigate(`/admin/products/${row.id}/edit`)}>Edit</Button>
+            <Button variant="danger" aria-label={`Delete ${row.name}`} onClick={() => { setDeleteError(""); setPendingDelete(row); }}>Delete</Button>
           </div>
         ),
       },
@@ -89,13 +97,14 @@ export function AdminProducts() {
   async function confirmDelete() {
     if (!pendingDelete || deleting) return;
     setDeleting(true);
+    setDeleteError("");
     try {
       await deleteProduct(pendingDelete.id);
       setPendingDelete(null);
+      setMessage("Product deleted.");
       await load();
     } catch (err) {
-      setError(getErrorMessage(err));
-      setPendingDelete(null);
+      setDeleteError(getErrorMessage(err));
     } finally {
       setDeleting(false);
     }
@@ -104,14 +113,13 @@ export function AdminProducts() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Inventory</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">SKU Catalog</span></>}
-        title="Product catalog"
+        title="Products"
         description="Manage products, supplier ownership, pricing, and stock availability."
-        actions={<Button variant="dark" onClick={() => navigate("/admin/products/new")} icon={<Icon name="add" size={16} />}>Add Product</Button>}
+        actions={<Button variant="dark" onClick={() => navigate("/admin/products/new")} icon={<Icon name="add" size={16} />}>Create product</Button>}
       />
       <Card className="p-space-base">
-      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-center" aria-label="Filter inventory catalog">
-        <ToolbarSearch value={search} onChange={setSearch} placeholder="Search name, SKU, description" />
+      <form onSubmit={(event) => { event.preventDefault(); setFilters({ search, category, supplier, lowStock: lowStock ? "1" : "" }); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-center" aria-label="Filter products">
+        <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search name, SKU, description" label="Search products" />
         <Select aria-label="Filter by category" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">All categories</option>
           {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -127,21 +135,23 @@ export function AdminProducts() {
         <Button type="submit" disabled={loading}>Apply filters</Button>
       </form>
       </Card>
+      {message ? <p role="status" className="text-sm text-secondary">{message}</p> : null}
       {error ? <ErrorState message={error} onRetry={load} /> : null}
       {loading ? <PageSkeleton /> : !error && (
         <Card>
-          <Table rows={products} columns={columns} empty={<EmptyState icon="inventory_2" title="No products found" description="Adjust filters or create a new SKU." actionLabel="Add Product" onAction={() => navigate("/admin/products/new")} />} />
+          <Table rows={pagination.rows} columns={columns} caption="Products" empty={<EmptyState icon="inventory_2" title="No products found" description="Adjust filters or create a product." actionLabel="Create product" onAction={() => navigate("/admin/products/new")} />} />
+          <Pagination {...pagination} onPageChange={pagination.setPage} label="Products" />
         </Card>
       )}
       <ConfirmModal
         open={Boolean(pendingDelete)}
         title="Delete product"
-        message={`Delete ${pendingDelete?.name}? This is only allowed if the SKU is not referenced by orders or stock history.`}
-        confirmLabel="Delete"
+        message={<><span>Delete {pendingDelete?.name}? This permanently removes the product if it has no orders or stock history.</span>{deleteError ? <span className="block mt-space-md text-error" role="alert">{deleteError}</span> : null}</>}
+        confirmLabel={deleteError ? "Retry delete" : "Delete product"}
         danger
         loading={deleting}
         onConfirm={confirmDelete}
-        onClose={() => { if (!deleting) setPendingDelete(null); }}
+        onClose={() => { if (!deleting) { setPendingDelete(null); setDeleteError(""); } }}
       />
     </>
   );

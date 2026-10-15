@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { Pagination } from "../../components/ui/Pagination";
 import { useAuth } from "../../context/AuthContext";
 import { listProducts } from "../../services/product.service";
 import { getCategories } from "../../services/discovery.service";
@@ -18,15 +20,17 @@ import { Icon } from "../../components/ui/Icon";
 export function SupplierProducts() {
   const { supplier } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const initialSearch = new URLSearchParams(location.search).get("search") || "";
-  const [search, setSearch] = useState(initialSearch);
+  const { filters, setFilters } = useListFilters({ search: "" });
+  const [search, setSearch] = useState(filters.search);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedFilterKey, setLoadedFilterKey] = useState("");
   const requestId = useRef(0);
+  const filterKey = `${supplier?.id || ""}:${filters.search}`;
+  const pagination = usePaginatedRows(products, { ready: !loading && !error && loadedFilterKey === filterKey });
 
-  async function load(searchOverride) {
+  async function load() {
     const activeRequest = ++requestId.current;
     if (!supplier?.id) {
       setProducts([]);
@@ -34,15 +38,15 @@ export function SupplierProducts() {
       setError("No supplier profile is linked to this account, so owned SKUs cannot be loaded.");
       return;
     }
-    const searchValue = (typeof searchOverride === "string" ? searchOverride : search).trim();
     setLoading(true);
     setError("");
     try {
       const params = { supplier: supplier.id };
-      if (searchValue) params.search = searchValue;
+      if (filters.search) params.search = filters.search;
       const [rows, cats] = await Promise.all([listProducts(params), getCategories()]);
       if (activeRequest !== requestId.current) return;
       setProducts(enrichProducts(rows || [], cats || [], [supplier]));
+      setLoadedFilterKey(filterKey);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -51,11 +55,10 @@ export function SupplierProducts() {
   }
 
   useEffect(() => {
-    const next = new URLSearchParams(location.search).get("search") || "";
-    setSearch(next);
-    load(next);
+    setSearch(filters.search);
+    load();
     return () => { requestId.current += 1; };
-  }, [supplier?.id, location.search]);
+  }, [supplier?.id, filters.search]);
 
   const columns = useMemo(
     () => [
@@ -65,7 +68,7 @@ export function SupplierProducts() {
       { key: "price", header: "Price", align: "right", render: (row) => formatCurrency(row.price) },
       { key: "quantity", header: "Qty", align: "right" },
       { key: "status", header: "Status", render: (row) => <StatusBadge status={stockStatus(row)} /> },
-      { key: "actions", header: "", render: (row) => <Button variant="outline" onClick={() => navigate(`/supplier/products/${row.id}/edit`)}>Edit</Button> },
+      { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`Edit ${row.name}`} onClick={() => navigate(`/supplier/products/${row.id}/edit`)}>Edit</Button> },
     ],
     [navigate]
   );
@@ -73,21 +76,21 @@ export function SupplierProducts() {
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Catalog</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Supplier products</span></>}
-        title="Your products"
+        title="Products"
         description="Manage the products and stock supplied by your company."
-        actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")} icon={<Icon name="add" size={16} />}>Add product</Button>}
+        actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")} icon={<Icon name="add" size={16} />}>Create product</Button>}
       />
       <Card className="p-space-base">
-      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search your products">
-        <ToolbarSearch value={search} onChange={setSearch} placeholder="Search your SKUs" />
+      <form onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }} className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search your products">
+        <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search name or SKU" label="Search products" />
         <Button type="submit" disabled={loading}>Search</Button>
       </form>
       </Card>
       {error ? <ErrorState message={error} onRetry={load} /> : null}
       {loading ? <PageSkeleton /> : !error && (
         <Card>
-          <Table rows={products} columns={columns} empty={<EmptyState icon="inventory_2" title="No products found" actionLabel="Create product" onAction={() => navigate("/supplier/products/new")} />} />
+          <Table rows={pagination.rows} columns={columns} caption="Your products" empty={<EmptyState icon="inventory_2" title="No products found" description="Try another search or create your first product." actionLabel="Create product" onAction={() => navigate("/supplier/products/new")} />} />
+          <Pagination {...pagination} onPageChange={pagination.setPage} label="Products" />
         </Card>
       )}
     </>
