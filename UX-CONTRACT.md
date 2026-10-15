@@ -135,7 +135,7 @@ Never include keys, bearer tokens, webhook URLs, passwords, or stored password h
 
 Implemented in source: flat shared surfaces; readable table headers and explicit row actions; stable busy-button geometry; shared search clear; global scrollbars and targeted reduced motion; corrected font loading; simpler login/registration; shared form validation and PasswordInput; product/profile dirty-state guards; data-router integration; explicit wrong-role guidance; a compact operator automation overview. Operational lists and the customer catalog use bounded pagination and URL-restored committed filters/pages. Product and customer order detail navigation preserves the owning list context.
 
-Remaining integration work: finish paging/filter and stock-form migration, preserve destructive dialogs on failure throughout touched flows, reconcile any unused legacy breadcrumb props, and verify the complete workflows in the browser. Account-review agent setup/execution evidence belongs to the automation task; a frontend description alone does not verify a working n8n agent.
+Stock forms use the shared validation owner, failed product deletion retains its confirmation, and legacy breadcrumb fragments have been removed. Browser checks and their coverage limits are recorded below. Account-review agent configuration and live execution evidence are recorded separately in automations/ROLE-AGENTS.md; a frontend description alone does not verify a working n8n agent.
 
 Track final completion in the task's TODO and verification record. Do not preserve old duplicate controls as permanent variants. Remove unused imports and obsolete code after migrating their consumers. These changes preserve the existing API and schema; scope rollback by coherent UI slice.
 
