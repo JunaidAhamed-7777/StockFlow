@@ -1,5 +1,6 @@
 import { api, unwrap } from "./api";
 import { asArray, toId } from "../utils/apiData";
+import { MAX_QUANTITY } from "../utils/cart";
 
 export async function listProducts(params = {}) {
   const query = {};
@@ -28,7 +29,13 @@ function toProductBody(payload) {
     lowStockThreshold: Number(payload.lowStockThreshold),
     categoryId: toId(payload.categoryId),
   };
-  if (payload.description != null && String(payload.description).trim()) {
+  if (!body.name || !body.sku || !Number.isFinite(body.price) || body.price < 0) {
+    throw new Error("Provide a product name, SKU, and a valid non-negative price.");
+  }
+  if ([body.quantity, body.lowStockThreshold].some((value) => !Number.isSafeInteger(value) || value < 0 || value > MAX_QUANTITY)) {
+    throw new Error("Stock and low-stock threshold must be non-negative whole numbers.");
+  }
+  if (payload.description != null) {
     body.description = String(payload.description).trim();
   }
   if (payload.supplierId != null && payload.supplierId !== "") {

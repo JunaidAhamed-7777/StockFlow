@@ -1,5 +1,6 @@
 import { api, unwrap } from "./api";
 import { asArray, publicUser, toId } from "../utils/apiData";
+import { isPositiveInteger } from "../utils/cart";
 
 function sanitizeOrder(order) {
   if (!order) return order;
@@ -21,13 +22,16 @@ export async function getOrder(id) {
 }
 
 export async function createOrder(items) {
+  const rows = asArray(items);
+  if (!rows.length || rows.some((item) => !item || !isPositiveInteger(item.quantity))) {
+    throw new Error("Add products with valid whole-number quantities before placing your order.");
+  }
   const payload = {
-    items: asArray(items)
+    items: rows
       .map((item) => ({
         productId: toId(item.productId),
         quantity: Number(item.quantity),
-      }))
-      .filter((item) => Number.isInteger(item.productId) && item.quantity > 0),
+      })),
   };
   const response = await api.post("/orders", payload);
   return sanitizeOrder(unwrap(response));

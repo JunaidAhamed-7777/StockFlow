@@ -4,7 +4,10 @@ export function asArray(value) {
 
 export function toId(value) {
   const id = Number(value);
-  return Number.isInteger(id) ? id : NaN;
+  if (!Number.isSafeInteger(id) || id <= 0 || id > 2_147_483_647) {
+    throw new Error("A valid record ID is required. Return to the list and try again.");
+  }
+  return id;
 }
 
 export function publicUser(user) {

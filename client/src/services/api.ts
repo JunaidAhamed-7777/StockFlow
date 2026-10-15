@@ -2,7 +2,7 @@ import axios, { type AxiosResponse } from "axios";
 import { TOKEN_KEY, readStorage, expireSession } from "../utils/storage";
 
 function normalizeApiBase(value: unknown): string {
-  return String(value || "http://localhost:3001/api")
+  return String(value || "/api")
     .trim()
     .replace(/\/+$/, "")
     .replace(/\/api\/api$/i, "/api");
@@ -20,7 +20,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   // Never attach this application's bearer token to an arbitrary absolute URL.
-  const target = new URL(config.url || "", `${apiBase.href.replace(/\/$/, "")}/`);
+  const target = new URL(api.getUri(config), window.location.origin);
   if (target.origin !== apiOrigin) {
     return Promise.reject(new Error("The API request must use the configured StockFlow server."));
   }

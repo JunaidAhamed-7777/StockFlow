@@ -13,8 +13,11 @@ export function getErrorMessage(error) {
   if (!error) return "Something went wrong. Please try again.";
 
   if (!error.response) {
+    if (["ECONNABORTED", "ETIMEDOUT"].includes(error.code)) {
+      return "The request took too long. Check your connection and try again.";
+    }
     if (error.code === "ERR_NETWORK" || error.message?.includes("Network")) {
-      return "Unable to reach the StockFlow API. Confirm the backend is running on port 3001.";
+      return "Unable to reach StockFlow. Check your connection and try again.";
     }
     return error.message || "Something went wrong. Please try again.";
   }
