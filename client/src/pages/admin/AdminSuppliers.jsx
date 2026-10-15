@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { useListFilters } from "../../hooks/useListState";
+import { useRemotePagination } from "../../hooks/useRemotePagination";
 import { Pagination } from "../../components/ui/Pagination";
-import { getSuppliers } from "../../services/discovery.service";
-import { listProducts } from "../../services/product.service";
+import { listSupplierPage } from "../../services/discovery.service";
 import { getErrorMessage } from "../../utils/errors";
 import { PageHeader, ToolbarSearch } from "../../components/ui/PageHeader";
 import { Card } from "../../components/ui/Card";
@@ -14,16 +14,15 @@ import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 
 export function AdminSuppliers() {
-  const [suppliers, setSuppliers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState(null);
+  const [loadedRequestKey, setLoadedRequestKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
   const { filters, setFilters } = useListFilters({ search: "" });
   const [search, setSearch] = useState(filters.search);
   const requestId = useRef(0);
-  const filtered = suppliers.filter((item) => `${item.companyName} ${item.user?.name || ""} ${item.user?.email || ""}`.toLowerCase().includes(filters.search.toLowerCase()));
-  const pagination = usePaginatedRows(filtered, { ready: !loading && !error });
+  const pagination = useRemotePagination(suppliers, { filters, loadedRequestKey, ready: !loading && !error });
   useEffect(() => { setSearch(filters.search); }, [filters.search]);
 
   async function load() {
@@ -31,10 +30,10 @@ export function AdminSuppliers() {
     setLoading(true);
     setError("");
     try {
-      const [rows, catalog] = await Promise.all([getSuppliers(), listProducts()]);
+      const rows = await listSupplierPage({ ...filters, page: pagination.requestedPage, pageSize: 20, includeProductCounts: true });
       if (activeRequest !== requestId.current) return;
-      setSuppliers(rows || []);
-      setProducts(catalog || []);
+      setSuppliers(rows);
+      setLoadedRequestKey(pagination.requestKey);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -45,7 +44,7 @@ export function AdminSuppliers() {
   useEffect(() => {
     load();
     return () => { requestId.current += 1; };
-  }, []);
+  }, [pagination.requestKey]);
 
   if (loading) return <PageSkeleton />;
   if (error) return <ErrorState message={error} onRetry={load} />;
@@ -72,7 +71,7 @@ export function AdminSuppliers() {
             { key: "contactNumber", header: "Contact", render: (row) => row.contactNumber || "—" },
             { key: "address", header: "Address", render: (row) => row.address || "—" },
             { key: "user", header: "Account", render: (row) => row.user?.email || "—" },
-            { key: "skus", header: "SKUs", align: "right", render: (row) => products.filter((item) => item.supplierId === row.id).length },
+            { key: "productCount", header: "SKUs", align: "right" },
             { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View ${row.companyName}`} onClick={() => setSelected(row)}>View</Button> },
           ]}
         />
