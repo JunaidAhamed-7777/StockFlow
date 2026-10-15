@@ -12,17 +12,19 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [uncertain, setUncertain] = useState(false);
 
   useEffect(() => {
     setQuantityChange("0");
     setReason("");
     setError("");
     setFieldErrors({});
+    setUncertain(false);
   }, [product?.id, open]);
 
   async function onSubmit(event) {
     event.preventDefault();
-    if (!product || saving) return;
+    if (!product || saving || uncertain) return;
     const errors = validateForm(event.currentTarget);
     const change = Number(quantityChange);
     if (!Number.isSafeInteger(change) || change === 0) {
@@ -53,24 +55,32 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
       setQuantityChange("0");
       setReason("");
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (!err?.response || err.response.status >= 500) {
+        setUncertain(true);
+        setError("We could not confirm whether the stock adjustment was applied. Close and refresh inventory, then review the current quantity before making another adjustment.");
+      } else setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
   }
 
   if (!product) return null;
+  function close() {
+    if (saving) return;
+    onClose();
+    if (uncertain) onAdjusted?.();
+  }
 
   return (
     <Modal
       open={open}
       title={`Adjust stock · ${product.sku}`}
       dismissible={!saving}
-      onClose={() => { if (!saving) onClose(); }}
+      onClose={close}
       footer={
         <>
-          <Button variant="outline" disabled={saving} onClick={onClose}>Cancel</Button>
-          <Button type="submit" form="stock-adjust-form" loading={saving}>Apply adjustment</Button>
+          <Button variant="outline" disabled={saving} onClick={close}>{uncertain ? "Close and refresh" : "Cancel"}</Button>
+          <Button type="submit" form="stock-adjust-form" disabled={uncertain} loading={saving}>Apply adjustment</Button>
         </>
       }
     >
@@ -88,13 +98,13 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
           step="1"
           min={-Number(product.quantity)}
           max={2147483647 - Number(product.quantity)}
-          disabled={saving}
+          disabled={saving || uncertain}
           value={quantityChange}
           onChange={(e) => { setQuantityChange(e.target.value); setFieldErrors(current => clearFieldError(current, "quantityChange")); }}
           required
         />
         <p className="font-body-sm">Quantity after adjustment: <strong className="font-mono-data">{Number.isSafeInteger(Number(quantityChange)) ? Number(product.quantity) + Number(quantityChange) : "—"}</strong></p>
-        <Textarea id="reason" name="reason" label="Reason for adjustment" error={fieldErrors.reason} placeholder="For example: supplier delivery received, or damaged units removed" maxLength={500} disabled={saving} required value={reason} onChange={(e) => { setReason(e.target.value); setFieldErrors(current => clearFieldError(current, "reason")); }} />
+        <Textarea id="reason" name="reason" label="Reason for adjustment" className="resize-none" error={fieldErrors.reason} placeholder="For example: supplier delivery received, or damaged units removed" maxLength={500} disabled={saving || uncertain} required value={reason} onChange={(e) => { setReason(e.target.value); setFieldErrors(current => clearFieldError(current, "reason")); }} />
         {error ? <p className="font-caption text-caption text-error" role="alert">{error}</p> : null}
       </form>
     </Modal>
