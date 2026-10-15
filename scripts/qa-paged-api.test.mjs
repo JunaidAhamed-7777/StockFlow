@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import vm from 'node:vm';
 import path from 'node:path';
 import { createPlan, isolatedEnvironment, isolatedClientSchema, verifyGeneratedClientSource,
-  verifyLocalDockerEndpoint, verifyDisposableContainer, fixtureRows, assertPage, runCaptured, recoverOwnedContainer } from './qa-paged-api.mjs';
+  verifyLocalDockerEndpoint, verifyDisposableContainer, fixtureRows, assertPage, runCaptured, recoverOwnedContainer,
+  validateSeedMessage, seedWorkerSource, createSeedWorkerClient } from './qa-paged-api.mjs';
 
 const plan = createPlan('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
 const id = 'a'.repeat(64);
@@ -112,6 +114,69 @@ test('late CID and uniquely named recovery require the full random ownership pro
     read: async () => { throw new Error('Missing CID'); },
     execute: async () => { const container = validContainer(); container.Config.Labels[plan.label] = 'foreign'; return JSON.stringify([container]); },
     wait: async () => {} }), /cleanup was not confirmed/);
+});
+
+test('seed worker messages expose only bounded scalar fixture createMany and disconnect operations', () => {
+  assert.doesNotThrow(() => validateSeedMessage({ id: 1, action: 'createMany', model: 'product', data: fixtureRows(44).products }));
+  assert.doesNotThrow(() => validateSeedMessage({ id: 2, action: 'disconnect' }));
+  for (const message of [
+    { id: 1, action: '$executeRaw', model: 'product', data: ['DELETE'] },
+    { id: 1, action: 'createMany', model: 'stockTransaction', data: [{ id: 1 }] },
+    { id: 1, action: 'createMany', model: 'product', data: [{ id: 1, supplier: { create: {} } }] },
+    { id: 1, action: 'createMany', model: 'product', data: Array.from({ length: 501 }, () => ({ id: 1 })) },
+    { id: 1, action: 'createMany', model: 'product', data: [{ description: 'x'.repeat(8_193) }] },
+    { id: 1, action: 'createMany', model: 'product', data: [{ price: Infinity }] },
+    { id: 1, action: 'disconnect', data: [] },
+  ]) assert.throws(() => validateSeedMessage(message));
+});
+
+test('seed worker owns Prisma loading and returns a redacted code rather than database diagnostics', async () => {
+  const processStub = new EventEmitter(); processStub.pid = 27;
+  processStub.env = { DATABASE_URL: 'synthetic-ephemeral-url' };
+  const sent = []; const inserted = []; let disconnected = false; let exited;
+  processStub.send = (message, callback) => { sent.push(message); callback?.(); };
+  processStub.exit = (code) => { exited = code; };
+  class FakePrisma {
+    constructor(options) {
+      assert.equal(options.datasources.db.url, 'synthetic-ephemeral-url');
+      this.user = { createMany: async ({ data }) => { inserted.push(data); return { count: data.length }; } };
+      this.product = { createMany: async () => { throw Object.assign(new Error('private password must not be sent'), { code: 'P2002' }); } };
+    }
+    async $disconnect() { disconnected = true; }
+  }
+  vm.runInNewContext(seedWorkerSource('isolated-client-entry'), { Buffer, process: processStub,
+    require: (entry) => { assert.equal(entry, 'isolated-client-entry'); return { PrismaClient: FakePrisma }; } });
+  processStub.emit('message', { id: 1, action: 'createMany', model: 'user', data: [{ id: 1, name: 'Synthetic' }] });
+  await new Promise(setImmediate);
+  assert.equal(inserted.length, 1);
+  processStub.emit('message', { id: 2, action: 'createMany', model: 'product', data: [{ id: 1 }] });
+  await new Promise(setImmediate);
+  assert.deepEqual(JSON.parse(JSON.stringify(sent.at(-1))), { type: 'seed-result', id: 2, ok: false, code: 'P2002' });
+  assert.ok(!JSON.stringify(sent).includes('private password'));
+  processStub.emit('message', { id: 3, action: 'disconnect' });
+  await new Promise(setImmediate);
+  assert.equal(disconnected, true); assert.equal(exited, 0);
+});
+
+test('parent seed proxy waits for worker process close after disconnect acknowledgement', async () => {
+  const child = new EventEmitter(); child.pid = 36;
+  const messages = []; child.send = (message, callback) => { messages.push(message); callback?.(); };
+  child.kill = () => { child.emit('close'); };
+  const client = createSeedWorkerClient(child);
+  child.emit('message', { type: 'seed-ready', pid: child.pid });
+  await client.ready;
+  const inserted = client.user.createMany({ data: [{ id: 1, name: 'Synthetic' }] });
+  await new Promise(setImmediate);
+  child.emit('message', { type: 'seed-result', id: messages[0].id, ok: true, count: 1 });
+  assert.deepEqual(await inserted, { count: 1 });
+  let finished = false;
+  const disconnect = client.$disconnect().then(() => { finished = true; });
+  await new Promise(setImmediate);
+  child.emit('message', { type: 'seed-result', id: messages[1].id, ok: true });
+  await new Promise(setImmediate);
+  assert.equal(finished, false);
+  child.emit('close'); await disconnect;
+  assert.equal(finished, true);
 });
 
 test('database operations and deletion require exact CID, random label and private loopback configuration', () => {

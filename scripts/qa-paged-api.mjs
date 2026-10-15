@@ -243,6 +243,114 @@ async function seedStage(prisma, previous, count) {
   return rows;
 }
 
+const SEED_COLUMNS = {
+  user: ['id', 'name', 'email', 'password', 'role', 'createdAt', 'updatedAt'],
+  supplier: ['id', 'userId', 'companyName', 'contactNumber', 'address', 'createdAt', 'updatedAt'],
+  category: ['id', 'name', 'description'],
+  product: ['id', 'name', 'description', 'sku', 'price', 'quantity', 'lowStockThreshold', 'categoryId', 'supplierId'],
+  order: ['id', 'customerId', 'status', 'totalAmount', 'createdAt', 'updatedAt'],
+  orderItem: ['id', 'orderId', 'productId', 'quantity', 'price'],
+};
+
+export function validateSeedMessage(message) {
+  if (!message || typeof message !== 'object' || !Number.isSafeInteger(message.id) || message.id < 1 || message.id > 1_000_000) {
+    throw new Error('Invalid isolated seed message.');
+  }
+  if (message.action === 'disconnect') {
+    if (Object.keys(message).some((key) => !['id', 'action'].includes(key))) throw new Error('Invalid isolated seed message.');
+    return;
+  }
+  if (message.action !== 'createMany' || !Object.hasOwn(SEED_COLUMNS, message.model)
+    || Object.keys(message).some((key) => !['id', 'action', 'model', 'data'].includes(key))
+    || !Array.isArray(message.data) || message.data.length < 1 || message.data.length > 500
+    || Buffer.byteLength(JSON.stringify(message)) > 4 * 1024 * 1024
+    || message.data.some((row) => !row || typeof row !== 'object' || Array.isArray(row)
+      || Object.entries(row).some(([key, value]) => !SEED_COLUMNS[message.model].includes(key)
+        || !(value === null || typeof value === 'string' && value.length <= 8_192
+          || typeof value === 'number' && Number.isFinite(value) || value instanceof Date && !Number.isNaN(value.getTime()))))) {
+    throw new Error('Invalid isolated seed message.');
+  }
+}
+
+export function seedWorkerSource(clientEntry) {
+  return `const { PrismaClient } = require(${JSON.stringify(clientEntry)});\n`
+    + `const SEED_COLUMNS = ${JSON.stringify(SEED_COLUMNS)};\nconst validateSeedMessage = ${validateSeedMessage.toString()};\n`
+    + `const prisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });\n`
+    + `let busy = false; let closing = false;\n`
+    + `process.on('message', async (message) => {\n`
+    + `  const id = Number.isSafeInteger(message?.id) ? message.id : 0;\n`
+    + `  try {\n    validateSeedMessage(message);\n    if (busy || closing) throw new Error('busy');\n    busy = true;\n`
+    + `    if (message.action === 'disconnect') {\n      closing = true;\n      await prisma.$disconnect();\n`
+    + `      process.send?.({ type: 'seed-result', id, ok: true }, () => process.exit(0));\n      return;\n    }\n`
+    + `    const result = await prisma[message.model].createMany({ data: message.data });\n`
+    + `    process.send?.({ type: 'seed-result', id, ok: true, count: result.count });\n`
+    + `  } catch (error) {\n    const code = /^P\\d{4}$/.test(error?.code || '') ? error.code : 'SEED_OPERATION_FAILED';\n`
+    + `    process.send?.({ type: 'seed-result', id, ok: false, code }, () => { if (closing) process.exit(1); });\n`
+    + `  } finally { busy = false; }\n});\n`
+    + `process.once('disconnect', async () => { try { await prisma.$disconnect(); } finally { process.exit(1); } });\n`
+    + `process.send?.({ type: 'seed-ready', pid: process.pid });\n`;
+}
+
+export function createSeedWorkerClient(child, { timeout = 30_000 } = {}) {
+  let ready = false; let closed = false; let sequence = 0; let pending;
+  let resolveReady; let rejectReady; let resolveClosed;
+  const exited = new Promise((resolve) => { resolveClosed = resolve; });
+  const initialized = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  const startupTimer = setTimeout(() => child.kill(), timeout);
+  child.on('error', () => { /* close always follows spawn error and releases handles */ });
+  child.once('close', () => {
+    closed = true; clearTimeout(startupTimer);
+    rejectReady(new Error('Isolated seed worker exited before readiness.'));
+    if (pending) { clearTimeout(pending.timer); pending.reject(new Error('Isolated seed worker exited during an operation.')); pending = null; }
+    resolveClosed();
+  });
+  child.on('message', (message) => {
+    if (message?.type === 'seed-ready' && message.pid === child.pid && !ready) {
+      ready = true; clearTimeout(startupTimer); resolveReady(); return;
+    }
+    if (message?.type !== 'seed-result' || message.id !== pending?.id) return;
+    const operation = pending; pending = null; clearTimeout(operation.timer);
+    if (message.ok !== true) {
+      const code = /^P\d{4}$/.test(message.code || '') ? ` (${message.code})` : '';
+      operation.reject(new Error(`Isolated seed operation failed${code}.`));
+    } else if (operation.disconnect || Number.isSafeInteger(message.count) && message.count === operation.count) {
+      operation.resolve({ count: message.count });
+    } else operation.reject(new Error('Isolated seed worker returned an invalid count.'));
+  });
+  async function request(payload) {
+    await initialized;
+    if (closed || pending) throw new Error('Isolated seed worker is unavailable or busy.');
+    const message = { id: ++sequence, ...payload };
+    validateSeedMessage(message);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => child.kill(), timeout);
+      pending = { id: message.id, resolve, reject, timer, count: message.data?.length, disconnect: payload.action === 'disconnect' };
+      child.send(message, (error) => { if (error) child.kill(); });
+    });
+  }
+  return { ready: initialized,
+    ...Object.fromEntries(Object.keys(SEED_COLUMNS).map((model) => [model, { createMany: ({ data }) => request({ action: 'createMany', model, data }) }])),
+    async $disconnect() {
+      if (!closed) {
+        try { await request({ action: 'disconnect' }); }
+        catch (error) { child.kill(); await exited; throw error; }
+      }
+      // The process must be gone before deleting generated Windows engine DLLs.
+      await exited;
+    },
+  };
+}
+
+async function startSeedWorker(env, directory, clientEntry) {
+  const script = path.join(directory, 'seed-worker.cjs');
+  await writeFile(script, seedWorkerSource(clientEntry), { mode: 0o600 });
+  const child = spawn(process.execPath, [script], { cwd: directory, env,
+    windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+  const client = createSeedWorkerClient(child);
+  try { await client.ready; return client; }
+  catch (error) { try { await client.$disconnect(); } catch { /* worker exit already awaited */ } throw error; }
+}
+
 async function startApi(env, directory, clientEntry) {
   const preload = path.join(directory, 'loopback-api.cjs');
   // Existing source keeps its normal port behavior. The test child alone gets
@@ -480,8 +588,9 @@ export async function runIsolated({ evidencePath, onReady } = {}) {
     await execute(process.execPath, [prismaCli, 'db', 'push', '--schema', schema, '--skip-generate'],
       { env: childEnv, cwd: directory });
     const clientEntry = await generateIsolatedClient(require, directory, schemaBytes.toString('utf8'), childEnv, execute);
-    const { PrismaClient } = require(clientEntry);
-    prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+    // The parent never loads Prisma or its native engine. A dedicated child owns
+    // all synthetic inserts and exits before temporary Windows DLL cleanup.
+    prisma = await startSeedWorker(childEnv, directory, clientEntry);
     const bcrypt = require('bcryptjs');
     const hashed = bcrypt.hashSync(loginPassword, 4);
     const users = [
@@ -548,7 +657,8 @@ export async function runIsolated({ evidencePath, onReady } = {}) {
     }
     const resolved = path.resolve(directory);
     if (resolved.startsWith(`${path.resolve(tmpdir())}${path.sep}`) && path.basename(resolved).startsWith('stockflow-paged-qa-')) {
-      await rm(resolved, { recursive: true, force: true });
+      try { await rm(resolved, { recursive: true, force: true }); }
+      catch { failure = new Error(`${failure ? `${failure.message} ` : ''}Temporary isolated workspace cleanup failed.`); }
     }
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
   }
