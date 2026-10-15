@@ -1,9 +1,12 @@
+import { useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import logo from "../../assets/logo.svg";
 import { useAuth } from "../../context/AuthContext";
 import { useApiHealth } from "../../hooks/useApiHealth";
 import { portalLabel, roleSubtitle } from "../../utils/roles";
 import { Icon } from "../ui/Icon";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 const NAV = {
   ADMIN: [
@@ -11,7 +14,7 @@ const NAV = {
       section: "Core",
       items: [
         { to: "/admin/dashboard", label: "Overview", icon: "grid_view" },
-        { to: "/admin/ai", label: "AI Forecasting", icon: "auto_graph" },
+        { to: "/admin/ai", label: "AI & Automation", icon: "auto_graph" },
         { to: "/admin/products", label: "Inventory & SKUs", icon: "inventory_2" },
         { to: "/admin/inventory", label: "Stock Control", icon: "warehouse" },
       ],
@@ -70,31 +73,45 @@ const NAV = {
 
 export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
   const { role, user, supplier } = useAuth();
+  const sidebarRef = useRef(null);
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const compact = collapsed && isDesktop;
+  useDialogFocus(sidebarRef, open && !isDesktop, onClose);
+  useEffect(() => {
+    if (sidebarRef.current) sidebarRef.current.inert = !isDesktop && !open;
+  }, [isDesktop, open]);
   const apiHealth = useApiHealth();
   const sections = NAV[role] || [];
   const apiLabel = apiHealth === "live" ? "API live" : apiHealth === "down" ? "API down" : "API…";
 
   return (
     <>
-      {open ? <button type="button" className="fixed inset-0 bg-on-surface/40 z-40 lg:hidden" onClick={onClose} aria-label="Close navigation" /> : null}
+      {open ? <div className="fixed inset-0 bg-on-surface/40 z-40 lg:hidden" onClick={onClose} aria-hidden="true" /> : null}
       <aside
-        className={`${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed left-0 top-0 h-screen ${collapsed ? "w-16" : "w-sidebar-width"} bg-surface-container-lowest border-r border-outline-variant z-50 flex flex-col justify-between select-none transition-all duration-200`}
+        ref={sidebarRef}
+        id="main-navigation"
+        tabIndex={-1}
+        role={open && !isDesktop ? "dialog" : undefined}
+        aria-modal={open && !isDesktop ? true : undefined}
+        aria-label="Main navigation"
+        aria-hidden={!isDesktop && !open ? true : undefined}
+        className={`${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed left-0 top-0 h-dvh ${compact ? "w-16" : "w-sidebar-width"} max-w-[calc(100vw-3rem)] lg:max-w-none bg-surface-container-lowest border-r border-outline-variant z-50 flex flex-col justify-between transition-all duration-200`}
       >
         <div className="flex flex-col min-h-0 flex-1">
           <div className="h-14 px-space-base border-b border-outline-variant flex items-center justify-between shrink-0">
             <div className="flex items-center gap-space-sm min-w-0">
               <img alt="StockFlow" src={logo} className="h-7 w-7 object-contain shrink-0" />
-              {!collapsed ? (
+              {!compact ? (
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-space-xs">
                     <span className="font-headline-sm text-headline-sm text-on-surface tracking-tight truncate">StockFlow</span>
-                    <span className="font-caption text-caption bg-surface-container-high text-secondary px-1.5 py-0.5 rounded border border-outline-variant">v2.4</span>
                   </div>
                 </div>
               ) : null}
             </div>
+            <button type="button" className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-lg hover:bg-surface-container-low" onClick={onClose} aria-label="Close navigation"><Icon name="close" /></button>
           </div>
-          {!collapsed ? (
+          {!compact ? (
             <div className="p-space-sm border-b border-outline-variant bg-surface-container-low/50 shrink-0">
               <div className="w-full flex items-center justify-between px-space-sm py-1.5 bg-surface-container-lowest rounded border border-outline-variant">
                 <div className="flex items-center gap-space-sm min-w-0">
@@ -115,18 +132,20 @@ export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
           <div className="flex-1 overflow-y-auto px-space-xs py-space-sm space-y-space-md">
             {sections.map((section) => (
               <div key={section.section} className="space-y-space-2xs">
-                {!collapsed ? (
+                {!compact ? (
                   <div className="px-space-sm py-1 font-caption text-caption text-outline uppercase tracking-wider">{section.section}</div>
                 ) : null}
-                <nav className="space-y-space-2xs">
+                <nav className="space-y-space-2xs" aria-label={section.section}>
                   {section.items.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
+                      end={item.to.endsWith("/products")}
                       onClick={onClose}
                       title={item.label}
+                      aria-label={compact ? item.label : undefined}
                       className={({ isActive }) =>
-                        `flex items-center gap-space-sm px-space-sm py-1.5 rounded transition-colors ${
+                        `flex items-center gap-space-sm min-h-10 px-space-sm py-2 rounded-lg transition-colors ${
                           isActive
                             ? "bg-primary-container text-on-primary-container font-medium"
                             : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface font-body-sm text-body-sm"
@@ -134,7 +153,7 @@ export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
                       }
                     >
                       <Icon name={item.icon} />
-                      {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                      {!compact ? <span className="truncate">{item.label}</span> : null}
                     </NavLink>
                   ))}
                 </nav>
@@ -144,7 +163,7 @@ export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
         </div>
         <div className="p-space-sm border-t border-outline-variant bg-surface-container-low shrink-0">
           <div className="flex items-center justify-between gap-space-xs">
-            {!collapsed ? (
+            {!compact ? (
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="relative flex h-2 w-2 shrink-0">
                   {apiHealth === "live" ? (
@@ -162,6 +181,9 @@ export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
             <button
               className="p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded transition-colors shrink-0 hidden lg:inline-flex"
               title={collapsed ? "Expand navigation" : "Collapse navigation"}
+              aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+              aria-expanded={!collapsed}
+              aria-controls="main-navigation"
               type="button"
               onClick={onToggleCollapse}
             >

@@ -1,35 +1,54 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RoleRedirect } from "./components/RoleRedirect";
-import { LoginPage } from "./pages/auth/LoginPage";
-import { RegisterPage } from "./pages/auth/RegisterPage";
-import { AdminDashboard } from "./pages/admin/AdminDashboard";
-import { AdminProducts } from "./pages/admin/AdminProducts";
-import { AdminProductFormPage } from "./pages/admin/AdminProductFormPage";
-import { AdminInventory } from "./pages/admin/AdminInventory";
-import { AdminOrders } from "./pages/admin/AdminOrders";
-import { AdminCustomers } from "./pages/admin/AdminCustomers";
-import { AdminSuppliers } from "./pages/admin/AdminSuppliers";
-import { AdminStockTransactions } from "./pages/admin/AdminStockTransactions";
-import { AdminAI } from "./pages/admin/AdminAI";
-import { AdminProfile } from "./pages/admin/AdminProfile";
-import { SupplierDashboard } from "./pages/supplier/SupplierDashboard";
-import { SupplierProducts } from "./pages/supplier/SupplierProducts";
-import { SupplierProductFormPage } from "./pages/supplier/SupplierProductFormPage";
-import { SupplierStock } from "./pages/supplier/SupplierStock";
-import { SupplierOrders } from "./pages/supplier/SupplierOrders";
-import { SupplierProfile } from "./pages/supplier/SupplierProfile";
-import { CustomerDashboard } from "./pages/customer/CustomerDashboard";
-import { CustomerProducts } from "./pages/customer/CustomerProducts";
-import { CustomerProductDetail } from "./pages/customer/CustomerProductDetail";
-import { CustomerCart } from "./pages/customer/CustomerCart";
-import { CustomerOrders } from "./pages/customer/CustomerOrders";
-import { CustomerOrderDetail } from "./pages/customer/CustomerOrderDetail";
-import { CustomerProfile } from "./pages/customer/CustomerProfile";
+import { Loading } from "./components/ui/Loading";
+
+const page = (loader, name) => lazy(async () => ({ default: (await loader())[name] }));
+const LoginPage = page(() => import("./pages/auth/LoginPage"), "LoginPage");
+const RegisterPage = page(() => import("./pages/auth/RegisterPage"), "RegisterPage");
+const AdminDashboard = page(() => import("./pages/admin/AdminDashboard"), "AdminDashboard");
+const AdminProducts = page(() => import("./pages/admin/AdminProducts"), "AdminProducts");
+const AdminProductFormPage = page(() => import("./pages/admin/AdminProductFormPage"), "AdminProductFormPage");
+const AdminInventory = page(() => import("./pages/admin/AdminInventory"), "AdminInventory");
+const AdminOrders = page(() => import("./pages/admin/AdminOrders"), "AdminOrders");
+const AdminCustomers = page(() => import("./pages/admin/AdminCustomers"), "AdminCustomers");
+const AdminSuppliers = page(() => import("./pages/admin/AdminSuppliers"), "AdminSuppliers");
+const AdminStockTransactions = page(() => import("./pages/admin/AdminStockTransactions"), "AdminStockTransactions");
+const AdminAI = page(() => import("./pages/admin/AdminAI"), "AdminAI");
+const AdminProfile = page(() => import("./pages/admin/AdminProfile"), "AdminProfile");
+const SupplierDashboard = page(() => import("./pages/supplier/SupplierDashboard"), "SupplierDashboard");
+const SupplierProducts = page(() => import("./pages/supplier/SupplierProducts"), "SupplierProducts");
+const SupplierProductFormPage = page(() => import("./pages/supplier/SupplierProductFormPage"), "SupplierProductFormPage");
+const SupplierStock = page(() => import("./pages/supplier/SupplierStock"), "SupplierStock");
+const SupplierOrders = page(() => import("./pages/supplier/SupplierOrders"), "SupplierOrders");
+const SupplierProfile = page(() => import("./pages/supplier/SupplierProfile"), "SupplierProfile");
+const CustomerDashboard = page(() => import("./pages/customer/CustomerDashboard"), "CustomerDashboard");
+const CustomerProducts = page(() => import("./pages/customer/CustomerProducts"), "CustomerProducts");
+const CustomerProductDetail = page(() => import("./pages/customer/CustomerProductDetail"), "CustomerProductDetail");
+const CustomerCart = page(() => import("./pages/customer/CustomerCart"), "CustomerCart");
+const CustomerOrders = page(() => import("./pages/customer/CustomerOrders"), "CustomerOrders");
+const CustomerOrderDetail = page(() => import("./pages/customer/CustomerOrderDetail"), "CustomerOrderDetail");
+const CustomerProfile = page(() => import("./pages/customer/CustomerProfile"), "CustomerProfile");
+
+function RouteMetadata() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const segment = pathname.split("/")[2] || pathname.split("/")[1];
+    const labels = { login: "Sign in", register: "Create account", dashboard: "Dashboard", products: "Products", inventory: "Stock control", orders: "Orders", suppliers: "Suppliers", customers: "Customers", "stock-transactions": "Stock transactions", ai: "AI & Automation", profile: "Profile", cart: "Cart", stock: "Stock management" };
+    document.title = `${labels[segment] || "Workspace"} · StockFlow`;
+  }, [pathname]);
+  return null;
+}
+
+function NotFound() {
+  return <main className="max-w-xl mx-auto px-6 py-20"><p className="text-secondary font-semibold mb-3">404 · Page unavailable</p><h1 className="font-headline-lg text-headline-lg">We couldn’t find this page</h1><p className="mt-3 mb-6 text-on-surface-variant">The link may have changed. Return to your workspace to continue.</p><Link to="/" className="inline-flex min-h-10 items-center px-4 py-2 rounded-lg bg-secondary text-white font-semibold">Return to workspace</Link></main>;
+}
 
 export default function App() {
   return (
+    <><RouteMetadata /><Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loading label="Loading StockFlow…" /></div>}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -75,7 +94,11 @@ export default function App() {
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="/supplier" element={<Navigate to="/supplier/dashboard" replace />} />
+      <Route path="/customer" element={<Navigate to="/customer/dashboard" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense></>
   );
 }
