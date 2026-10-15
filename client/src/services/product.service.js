@@ -22,8 +22,8 @@ export async function listProducts(params = {}) {
   return asArray(unwrap(response));
 }
 
-export async function getProduct(id) {
-  const response = await api.get(`/products/${toId(id)}`);
+export async function getProduct(id, { signal } = {}) {
+  const response = await api.get(`/products/${toId(id)}`, { signal });
   return unwrap(response);
 }
 
