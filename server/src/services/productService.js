@@ -1,5 +1,6 @@
 const prisma = require('../prismaClient');
 const { getProductPage } = require('./pagedReadService').createPagedReads(prisma);
+const { readError } = require('./readQuery');
 
 const createProduct = async ({ name, description, sku, price, quantity, lowStockThreshold, categoryId, supplierId }) => {
   // Basic validation
@@ -76,7 +77,7 @@ const getAll = async (filters = {}) => {
 
 const getById = async (id) => {
   const product = await prisma.product.findUnique({ where: { id }, include: { category: true, supplier: true } });
-  if (!product) throw new Error('Product not found');
+  if (!product) throw readError('Product not found', 404);
   return product;
 };
 
