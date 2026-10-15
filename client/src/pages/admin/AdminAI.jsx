@@ -13,9 +13,9 @@ import { Badge } from "../../components/ui/Badge";
 const WORKFLOWS = [
   { title: "Critical stock alerts", icon: "notifications_active", schedule: "Every 15 minutes", description: "Groups products by their stock owner when quantity reaches zero or half the product's reorder threshold. Successful alerts have a 24-hour cooldown, with immediate out-of-stock escalation." },
   { title: "Daily inventory digest", icon: "inventory_2", schedule: "Daily · 09:00 IST", description: "Summarizes each owner's inventory and products at or below their reorder threshold. One digest per owner per day." },
-  { title: "Open order follow-up", icon: "local_shipping", schedule: "Daily · 10:00 IST", description: "Flags pending or processing orders open for at least 48 hours. Each owner receives only the lines for their own products." },
-  { title: "Inventory data audit", icon: "fact_check", schedule: "Monday · 09:30 IST", description: "Reports missing ownership or categories, invalid stock and prices, and SKUs that need review. Sends an administrator report only when issues exist; it does not change records." },
-  { title: "New and changed orders", icon: "update", schedule: "Every 15 minutes", description: "Records an initial baseline, then reports new orders and observed status changes. Messages contain only the intended supplier’s order lines, with no historical mail on first setup." },
+  { title: "Open order follow-up", icon: "local_shipping", schedule: "Daily · 10:00 IST", description: "Flags pending or processing orders open for at least 48 hours. Each channel post groups only the intended supplier’s own order lines." },
+  { title: "Inventory data audit", icon: "fact_check", schedule: "Monday · 09:30 IST", description: "Reports missing ownership or categories, invalid stock and prices, and SKUs that need review. Posts an administrator report only when issues exist; it does not change records." },
+  { title: "New and changed orders", icon: "update", schedule: "Every 15 minutes", description: "Records an initial baseline, then reports new orders and observed status changes. Posts contain only the intended supplier’s order lines, with no historical notifications on first setup." },
 ];
 
 async function probe(label, fn) {
@@ -48,7 +48,7 @@ export function AdminAI() {
       <PageHeader
         breadcrumb={<><span>Core</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">AI Forecasting</span></>}
         title="Automations & AI"
-        description="Keep owners informed with inventory rules. Review AI availability separately."
+        description="Review inventory rules and their intended recipients. Manage delivery through local n8n."
         badge={
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container text-secondary text-label-sm">
             <Icon name="hub" size={14} /> Local n8n
@@ -57,10 +57,11 @@ export function AdminAI() {
         actions={<a href="http://localhost:5678/home/workflows" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-space-sm h-10 rounded-lg border border-outline-variant px-space-md text-sm font-semibold text-secondary hover:bg-surface">Open local n8n<Icon name="open_in_new" size={16} /></a>}
       />
       <Card className="p-space-lg space-y-space-sm">
-        <div className="flex items-center gap-space-sm flex-wrap"><h2 className="text-lg font-semibold">Notification workflows</h2><Badge tone="info">Redirected delivery</Badge></div>
-        <p className="text-sm text-on-surface-variant">All outgoing workflow email is routed to junuhammad2@gmail.com. Each message names the intended stock owner or administrator and their recorded email. Supplier addresses are never added to To, CC, or BCC.</p>
-        <p className="text-sm text-on-surface-variant">Connect send-only Gmail OAuth in n8n before enabling delivery. These rules use recorded data and make no OpenAI calls.</p>
-        <p className="text-xs text-on-surface-variant">Workflow definitions and schedules are shown here. Live execution and connection status are available in n8n.</p>
+        <div className="flex items-center gap-space-sm flex-wrap"><h2 className="text-lg font-semibold">Notification workflows</h2><Badge tone="info">Discord delivery</Badge></div>
+        <p className="text-sm text-on-surface-variant">A Discord channel webhook is required before delivery can begin. All five workflows post to one chosen channel, and each post identifies its intended stock owner or administrator by name, recorded email, and supplier ID.</p>
+        <p className="text-sm text-on-surface-variant">Everyone who can read the channel can see its inventory details. Stock owners receive no direct messages or email. Mention syntax is neutralized; address at-signs display as [at]. Lengthy details are capped with a notice.</p>
+        <p className="text-sm text-on-surface-variant">Review a successful connection test in n8n before enabling critical stock alerts. The other workflows start in preview. These rules use recorded data and make no OpenAI calls.</p>
+        <p className="text-xs text-on-surface-variant">Definitions and schedules are shown here. Open n8n to check the connected credential, live delivery settings, and execution status.</p>
       </Card>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-space-base">
         {WORKFLOWS.map((workflow) => <Card key={workflow.title} className="p-space-lg flex flex-col gap-space-md"><Icon name={workflow.icon} className="text-secondary" size={24} /><h2 className="font-semibold">{workflow.title}</h2><p className="text-xs font-semibold text-secondary">{workflow.schedule}</p><p className="text-sm text-on-surface-variant">{workflow.description}</p><Badge className="self-start">Rule-based · no AI cost</Badge></Card>)}
