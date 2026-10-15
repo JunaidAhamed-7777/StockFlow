@@ -47,6 +47,8 @@ Five rule-based workflows are available locally and default to preview mode:
 
 **Gmail OAuth setup was canceled in favor of Discord incoming webhooks.** No Google client or bot OAuth is required. Follow [Discord setup](automations/DISCORD.md): import the private webhook into encrypted n8n storage, confirm one labeled test, then enable only critical stock alerts. The other workflows remain in preview. Source templates always default to disabled delivery.
 
+The current local installation passed its Discord connection test and has critical-stock alerts enabled as of 15 October 2026. All five installed graphs and activation settings were verified after restarting n8n. The test draft is inactive, and the webhook URL's temporary import file has been removed.
+
 These workflows make no OpenAI calls. The root OpenAI API key stays private and is not needed for stock rules. AI forecast/recommendation endpoints remain unimplemented; the UI shows that limitation honestly.
 
 ## Validate

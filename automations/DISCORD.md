@@ -1,6 +1,6 @@
 # Discord notifications with local n8n
 
-The local Discord webhook was imported into encrypted n8n storage and **one labeled connection test was confirmed on 15 October 2026**. The temporary URL file was removed. Critical-alert activation is the next step after installed previews pass. All tracked workflow templates start with `notificationsEnabled: false`; publishing a schedule alone does not enable posting.
+The local Discord webhook is stored encrypted in n8n, **one labeled connection test was confirmed on 15 October 2026, and critical-stock alerts are enabled**. The other four workflows remain previews. The temporary URL file was removed. All five graphs, published states, credential bindings, and delivery settings were verified after restarting n8n; private evidence is in `.local/discord-live-verification.json`. Tracked templates still start with `notificationsEnabled: false`; publishing a schedule alone does not enable posting.
 
 This setup uses local n8n and an ordinary Discord incoming webhook, with no paid integration, Google OAuth, or OpenAI calls. A Discord bot application is not required. n8n sends outbound requests to Discord; the local editor does not need a public URL or tunnel. The app, API, Docker, and n8n must stay running for scheduled checks.
 
