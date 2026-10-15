@@ -43,8 +43,8 @@ threshold, critical uses zero or `floor(threshold * 0.5)`, and out means zero.
 The old unpaged `lowStock`/`lowStockThreshold` behavior remains compatible.
 Paged calls reject mixing these legacy stock parameters with `stock`.
 
-Sorts: `id`, `name`, `sku`, `price`, or `quantity`, ascending/descending; default
-ID ascending. Page rows contain numeric identity, name, SKU, price, quantity,
+Sorts use `sortBy` (`id`, `name`, `sku`, `price`, or `quantity`) and `sortOrder`
+(`asc` or `desc`); default ID ascending. Page rows contain numeric identity, name, SKU, price, quantity,
 lowStockThreshold, categoryId and supplierId. Descriptions and owner contact
 objects are omitted. Display text is bounded (name 256, SKU 128 characters), with
 explicit `truncatedFields`; full values remain available through product detail.
@@ -62,11 +62,14 @@ ADMIN sees all orders, CUSTOMER only its verified customer ID, and SUPPLIER only
 orders containing its verified supplier's products. Missing supplier identity
 fails closed. Caller query parameters cannot replace these predicates.
 
-Filters: status from PENDING/PROCESSING/SHIPPED/DELIVERED/CANCELLED and search by
-order number (optional leading #). Admin/supplier search may additionally match
+Filters: status from PENDING/PROCESSING/SHIPPED/DELIVERED/CANCELLED and literal
+order-number substring (optional leading #), preserving the existing list search.
+Admin/supplier search may additionally match
 the existing permitted customer name/email. Scope precedes search/count/paging.
-Sorts initially cover createdAt, ID and status; default createdAt descending then
-ID descending. Supplier lists cannot sort by another supplier's/global amount.
+`sortBy` initially covers `createdAt`, `id` and `status`, with `sortOrder` of
+`asc` or `desc`; default createdAt descending then ID descending. Supplier lists
+cannot sort by another supplier's/global amount. ID text matching and literal
+search escaping run in the database, without loading all IDs into Node.
 
 Summary rows contain ID, customerId, status, createdAt, updatedAt,
 visibleLineCount, visibleUnits, visibleAmount and amountScope. `amountScope` is
@@ -79,8 +82,9 @@ may enter a read projection.
 
 Line COUNT, units and supplier subtotal use one parameterized database aggregate
 over authorized page order IDs. They must not transfer complete line arrays to
-Node. The page summary provides exact matching order/status counts and scoped
-amounts for cards/previews. Money calculations retain existing stored-price
+Node. The page summary provides `orderCount`, `statusCounts` (all five statuses),
+`visibleLineCount`, `visibleUnits` and `visibleAmount` for the entire filtered
+scope. Money calculations retain existing stored-price
 semantics; this is not a financial-model/schema migration.
 
 Full lines are fetched only when opening the existing `/api/orders/:id` detail.
@@ -108,11 +112,16 @@ Migrate all current complete-array consumers deliberately:
   list or metric.
 - Dashboards request only their existing 6/8-row previews and complete scoped
   metrics. They must not fetch all orders/catalog merely to slice a preview.
-- Supplier-directory product counts use an opt-in aggregate on the existing
-  supplier discovery read, rather than loading every product in the browser.
+- Supplier-directory product counts use the paged existing discovery read with
+  `includeProductCounts=true`, rather than loading every product in the browser.
+  Discovery without page parameters retains its complete-array shape.
 - The existing admin customer directory is derived from customers with orders.
-  A bounded ADMIN-only grouped order-summary view provides its order count,
-  spending and latest order; the global dashboard customer metric stays distinct.
+  `GET /api/orders?view=customers&page=...` is a bounded ADMIN-only grouped view
+  with `id`, `name`, `email`, `orderCount`, `totalSpending` and `lastOrderAt`.
+  It groups all lifetime orders before applying customer name/email search,
+  defaults to name ascending with ID as a tie-breaker, and rejects status filters,
+  unpaged calls and other roles. Its page summary includes `customerCount` and
+  `totalSpending`; the global dashboard customer metric stays distinct.
   This does not invent access to customers without orders or a new user route.
 - Cart validation requests only its existing product detail IDs with bounded
   concurrency. Absence from page one must never mean a cart product is missing.
