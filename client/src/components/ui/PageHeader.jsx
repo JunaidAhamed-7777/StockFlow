@@ -57,6 +57,9 @@ export function ToolbarSearch({ value, onChange, onClear, placeholder = "Searchâ
         ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault();
+        }}
         placeholder={placeholder}
         type="search"
         disabled={disabled}
