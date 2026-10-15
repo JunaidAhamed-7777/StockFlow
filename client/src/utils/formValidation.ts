@@ -18,8 +18,9 @@ export function validateForm(form: HTMLFormElement): FieldErrors {
     const value = field.value;
     const isSecret = field.type === 'password' || /password/i.test(field.name) || /password/.test(field.autocomplete);
     const empty = isSecret ? value.length === 0 : value.trim().length === 0;
-    if (field.required && (empty || (field instanceof HTMLInputElement && ['checkbox', 'radio'].includes(field.type) && !field.checked))) errors[key] = `Enter ${label}.`;
-    else if (!empty && field.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) errors[key] = 'Enter a valid email address.';
+    const isCheckable = field instanceof HTMLInputElement && ['checkbox', 'radio'].includes(field.type);
+    if (field.required && (field.validity.valueMissing || (!isCheckable && empty))) errors[key] = `Enter ${label}.`;
+    else if (!empty && field.type === 'email' && (field.validity.typeMismatch || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))) errors[key] = 'Enter a valid email address.';
     else if (field instanceof HTMLInputElement && field.type === 'number' && (!empty || field.validity.badInput)) {
       const number = Number(value);
       if (empty || !Number.isFinite(number)) errors[key] = `Enter a valid ${label}.`;
@@ -27,7 +28,7 @@ export function validateForm(form: HTMLFormElement): FieldErrors {
       else if (field.min !== '' && number < Number(field.min)) errors[key] = `Enter ${field.min} or more.`;
       else if (field.max !== '' && number > Number(field.max)) errors[key] = `Enter ${field.max} or less.`;
       else if (field.validity.stepMismatch) errors[key] = `Use increments of ${field.step || '1'}.`;
-    } else if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+    } else if (!empty && (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) {
       if (field.minLength > 0 && value.length < field.minLength) errors[key] = `Use at least ${field.minLength} characters.`;
       else if (field.maxLength > 0 && value.length > field.maxLength) errors[key] = `Use ${field.maxLength} characters or fewer.`;
       else if (field.validity.patternMismatch) errors[key] = `Check the format for ${label}.`;
