@@ -20,7 +20,7 @@ All five Gmail nodes also have their transport destination fixed to **junuhammad
 
 ## Connect send-only Gmail OAuth
 
-The n8n owner login authorizes the local editor; it does not authorize Gmail. Google Cloud client configuration and Google account consent are still required. The embedded Google Cloud console currently renders blank in this setup; complete the Google Cloud steps in a regular browser, then return to the local n8n credential form.
+The n8n owner login authorizes the local editor; it does not authorize Gmail. Google Cloud client configuration and Google account consent are still required. Google Cloud setup is unreliable in this embedded browser: the project form eventually rendered, but project lists report **Error while loading resources**, recent projects fail to load, and notifications report **Error loading**. Complete these Google Cloud steps in a regular browser, then return to the local n8n credential form. A project named **StockFlow Local** (proposed ID `stockflow-local`) was submitted, but Google did not confirm its creation; check whether it exists before creating another project.
 
 1. In a Google Cloud project, enable the **Gmail API** and configure the OAuth consent screen. Use appropriate app/contact details. For an External app in Testing, add the intended sending Google account as a test user.
 2. Create an OAuth client with application type **Web application**. Register the exact redirect URI displayed by n8n: `http://localhost:5678/rest/oauth2-credential/callback` for this installation. Google permits this localhost callback; no tunnel or public n8n host is needed.

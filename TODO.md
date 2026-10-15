@@ -34,7 +34,7 @@ This work uses the existing API and Prisma schema. `server/` remains unchanged.
 - [x] Prepare the Gmail OAuth credential form with only `https://www.googleapis.com/auth/gmail.send`.
 - [x] Add strict credential validation and updates that preserve delivery markers and order baselines.
 - [x] Import and publish all five redirected definitions, restart n8n, and confirm its startup index contains five published workflows.
-- [ ] Complete Google OAuth in n8n. Google Cloud's project/client setup pages failed to render in the in-app browser; the user has been asked to complete those Google steps in a regular browser and enter the client credentials directly in the prepared n8n form.
+- [ ] Complete Google OAuth in n8n. Google Cloud setup is unreliable in the embedded browser: project/resource lists and notifications fail. The project form eventually rendered and a StockFlow Local project was submitted, but creation was not confirmed; verify whether it exists before creating another. The user has been asked to finish those Google steps in a regular browser and enter client credentials directly in the prepared n8n form.
 - [ ] Send one explicitly labeled connection test to the redirect mailbox and enable low-stock delivery after OAuth succeeds.
 
 ## Verification
