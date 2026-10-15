@@ -28,12 +28,28 @@ export function saveRuntimeMarker(filename, config, replace = renameSync) {
   } finally { if (existsSync(temporary)) unlinkSync(temporary); }
 }
 
+export function hasGeneratedPrismaClient(root) {
+  try {
+    const schema = readFileSync(path.join(root, 'server/prisma/schema.prisma'), 'utf8');
+    const generated = path.join(root, 'node_modules/.prisma/client');
+    // Prisma formats its schema copy; ignore formatting/comments, preserving strings.
+    const tokens = (source) => source.replace(/"(?:\\.|[^"\\])*"|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\s+/g, (token) => token.startsWith('"') ? token : '');
+    if (tokens(schema) !== tokens(readFileSync(path.join(generated, 'schema.prisma'), 'utf8'))) return false;
+    const index = readFileSync(path.join(generated, 'index.js'), 'utf8');
+    const metadata = index.match(/config\.runtimeDataModel\s*=\s*JSON\.parse\(("(?:\\.|[^"\\])*")\)/)?.[1];
+    if (!metadata) return false; // npm postinstall creates a throwing index.js stub.
+    const models = JSON.parse(JSON.parse(metadata)).models;
+    const expected = [...schema.matchAll(/^\s*model\s+(\w+)\s*\{/gm)].map((match) => match[1]);
+    return Boolean(expected.length > 0 && models && Object.keys(models).length === expected.length && expected.every((name) => Object.hasOwn(models, name)));
+  } catch { return false; }
+}
+
 export function createLocalRuntime({
   root = defaultRoot, localDirectory = path.join(root, '.local'),
   capture: captureImpl, run: runImpl, processSnapshot: snapshotImpl, listenerPids: listenersImpl,
   background: backgroundImpl, spawnProcess = spawn, ready: readyImpl, kill = (pid, signal) => process.kill(pid, signal),
   wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
-  replaceMarker = renameSync, exists = existsSync, environment = process.env, execPath = process.execPath,
+  replaceMarker = renameSync, exists = existsSync, generatedClientReady, environment = process.env, execPath = process.execPath,
   identity, log = console.log,
 } = {}) {
   const localDir = localDirectory;
@@ -218,8 +234,13 @@ export function createLocalRuntime({
     }
     const runtimeEnv = { ...environment, DATABASE_URL: config.databaseUrl, JWT_SECRET: config.jwtSecret, BCRYPT_SALT_ROUNDS: '12', PORT: '3001', CLIENT_URL: 'http://localhost:5173' };
     const prisma = path.join(root, 'node_modules/prisma/build/index.js');
-    // Never replace an engine DLL already loaded by a running API on Windows.
-    if (!exists(path.join(root, 'node_modules/.prisma/client/index.js'))) run(execPath, [prisma, 'generate', '--schema', 'server/prisma/schema.prisma'], { env: runtimeEnv });
+    const clientReady = () => generatedClientReady ? generatedClientReady() : exists(path.join(root, 'node_modules/.prisma/client/index.js')) && hasGeneratedPrismaClient(root);
+    if (!clientReady()) {
+      // Never replace an engine DLL already loaded by a running API on Windows.
+      if (ownedSnapshot(config, 'server')) throw new Error('The Prisma client needs generation. Stop the verified app processes before retrying start.');
+      run(execPath, [prisma, 'generate', '--schema', 'server/prisma/schema.prisma'], { env: runtimeEnv });
+      if (!clientReady()) throw new Error('Prisma generation did not produce a verified client. No schema or seed operation was attempted.');
+    }
     if (!config.initialized) {
       const tables = capture('docker', ['exec', config.containerId, 'psql', '-U', 'stockflow', '-d', 'stock_management', '-tAc', "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"]);
       if (tables.status !== 0 || !/^\d+$/.test(tables.stdout.trim()) || Number(tables.stdout.trim()) !== 0) throw new Error('Initial setup requires an empty public schema. The non-empty demo database was not pushed or reseeded.');

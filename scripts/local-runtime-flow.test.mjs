@@ -2,16 +2,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, renameSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createLocalRuntime, saveRuntimeMarker, runtimeCommandIdentity } from './local-runtime-core.mjs';
+import { createLocalRuntime, saveRuntimeMarker, runtimeCommandIdentity, hasGeneratedPrismaClient } from './local-runtime-core.mjs';
 
 function fixture(t) {
   const prefix = path.join(tmpdir(), 'stockflow-runtime-');
   const root = mkdtempSync(prefix);
   t.after(() => { assert.ok(root.startsWith(prefix)); rmSync(root, { recursive: true, force: true }); });
-  const state = { containers: new Map(), volume: null, processes: new Map(), ports: new Map(), mutations: [], captures: [], tables: 0, seedCount: 0, nextPid: 100, replacements: 0, healthy: true };
+  const state = { containers: new Map(), volume: null, processes: new Map(), ports: new Map(), mutations: [], captures: [], tables: 0, seedCount: 0, nextPid: 100, replacements: 0, healthy: true, clientReady: true };
   const result = (stdout = '', status = 0) => ({ status, stdout });
   const capture = (command, args) => {
     assert.equal(command, 'docker'); state.captures.push([...args]);
@@ -45,13 +45,13 @@ function fixture(t) {
     assert.equal(command, 'fixture-node');
     if (args.includes('push')) { state.tables = 8; return; }
     if (args[0] === 'prisma/seed.js') { if (state.failSeed) throw new Error('Fixture seed failed'); state.seedCount++; return; }
-    if (args.includes('generate')) return;
+    if (args.includes('generate')) { state.clientReady = true; return; }
     assert.fail(`Unexpected run: ${command} ${args.join(' ')}`);
   };
   const options = {
     root, environment: { FIXTURE: 'true' }, execPath: 'fixture-node', identity: { pid: 991, startedAt: 'fixture-command-start', script: path.join(root, 'scripts/local-runtime.mjs') },
     capture, run, processSnapshot: (pid) => state.processes.get(pid) || null,
-    listenerPids: (port) => state.ports.get(port) || [], ready: async () => state.healthy, wait: async () => {}, log: () => {}, exists: () => true,
+    listenerPids: (port) => state.ports.get(port) || [], ready: async () => state.healthy, wait: async () => {}, log: () => {}, generatedClientReady: () => state.clientReady,
     background: async (name, env, definition) => {
       const pid = ++state.nextPid;
       const snapshot = { pid, startedAt: `fixture-${pid}`, executable: 'node.exe', commandLine: `node "${definition.script}"` };
@@ -69,6 +69,65 @@ function fixture(t) {
   const runtime = createLocalRuntime(options);
   return { root, state, options, runtime, read: () => JSON.parse(readFileSync(runtime.configPath, 'utf8')), bytes: () => readFileSync(runtime.configPath, 'utf8') };
 }
+
+function clientArtifacts(root) {
+  const schema = readFileSync(new URL('../server/prisma/schema.prisma', import.meta.url), 'utf8');
+  const generated = path.join(root, 'node_modules/.prisma/client');
+  mkdirSync(path.join(root, 'server/prisma'), { recursive: true }); mkdirSync(generated, { recursive: true });
+  writeFileSync(path.join(root, 'server/prisma/schema.prisma'), schema);
+  writeFileSync(path.join(generated, 'schema.prisma'), `// Prisma-formatted schema copy\r\n${schema.replaceAll('\n', '\r\n')}`);
+  const models = Object.fromEntries([...schema.matchAll(/^\s*model\s+(\w+)\s*\{/gm)].map((match) => [match[1], { fields: [] }]));
+  const index = path.join(generated, 'index.js');
+  const validIndex = `const config = {}; config.runtimeDataModel = JSON.parse(${JSON.stringify(JSON.stringify({ models }))});`;
+  // Same public artifact/failure mode as @prisma/client's npm postinstall placeholder.
+  const stub = `module.exports.PrismaClient = class { constructor() { throw new Error('@prisma/client did not initialize yet'); } };`;
+  writeFileSync(index, stub);
+  return { schema, generated, index, validIndex, stub };
+}
+
+test('generated-client guard rejects the postinstall index stub, incomplete metadata and stale schema', (t) => {
+  const f = fixture(t); assert.equal(hasGeneratedPrismaClient(f.root), false);
+  const artifacts = clientArtifacts(f.root);
+  assert.equal(hasGeneratedPrismaClient(f.root), false); // index.js and copied schema alone are insufficient.
+  writeFileSync(artifacts.index, artifacts.validIndex);
+  assert.equal(hasGeneratedPrismaClient(f.root), true); // Formatting and comments do not force regeneration.
+  writeFileSync(path.join(artifacts.generated, 'schema.prisma'), artifacts.schema.replace('env("DATABASE_URL")', 'env("OTHER_DATABASE")'));
+  assert.equal(hasGeneratedPrismaClient(f.root), false);
+  writeFileSync(path.join(artifacts.generated, 'schema.prisma'), artifacts.schema);
+  for (const metadata of ['{broken', JSON.stringify({ models: { Other: {} } }), JSON.stringify({})]) {
+    writeFileSync(artifacts.index, `config.runtimeDataModel = JSON.parse(${JSON.stringify(metadata)});`);
+    assert.equal(hasGeneratedPrismaClient(f.root), false);
+  }
+});
+
+test('postinstall stub generates before schema/seed; a verified client is reused on repeated start', async (t) => {
+  const f = fixture(t), artifacts = clientArtifacts(f.root);
+  const runtime = createLocalRuntime({ ...f.options, generatedClientReady: () => hasGeneratedPrismaClient(f.root), run: (command, args, options) => {
+    f.options.run(command, args, options);
+    if (args.includes('generate')) writeFileSync(artifacts.index, artifacts.validIndex);
+  } });
+  await runtime.execute('start');
+  const commands = f.state.mutations.filter((entry) => entry.command === 'fixture-node').map((entry) => entry.args);
+  assert.equal(commands.length, 3); assert.ok(commands[0].includes('generate')); assert.ok(commands[1].includes('push')); assert.equal(commands[2][0], 'prisma/seed.js');
+  const mutations = f.state.mutations.length, marker = f.bytes();
+  await runtime.execute('start');
+  assert.equal(f.state.mutations.length, mutations); assert.equal(f.bytes(), marker); assert.equal(f.state.seedCount, 1);
+});
+
+test('failed client generation stops before schema mutation and never replaces a running API client', async (t) => {
+  const fresh = fixture(t); clientArtifacts(fresh.root);
+  const runtime = createLocalRuntime({ ...fresh.options, generatedClientReady: () => hasGeneratedPrismaClient(fresh.root) });
+  await assert.rejects(runtime.execute('start'), /did not produce a verified client/);
+  assert.equal(fresh.state.tables, 0); assert.equal(fresh.state.seedCount, 0); assert.equal(fresh.state.processes.size, 0);
+  assert.equal(fresh.state.mutations.some((entry) => entry.args?.includes('push')), false);
+  assert.equal(existsSync(runtime.lockPath), false); assert.equal(existsSync(`${runtime.lockPath}.guard`), false);
+  const running = fixture(t); await running.runtime.execute('start');
+  running.state.clientReady = false;
+  const mutations = running.state.mutations.length, marker = running.bytes();
+  await assert.rejects(running.runtime.execute('start'), /Stop the verified app processes/);
+  assert.equal(running.state.mutations.length, mutations); assert.equal(running.bytes(), marker);
+  assert.equal(existsSync(running.runtime.lockPath), false);
+});
 
 test('fresh empty setup initializes schema and seed once; repeated start preserves credentials, IDs and all existing data', async (t) => {
   const f = fixture(t); await f.runtime.execute('start');
