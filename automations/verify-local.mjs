@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertLocalN8n, parseCliJson } from './local-n8n.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const WORKFLOW_MODES = Object.freeze({
@@ -96,7 +97,7 @@ function inspectInstalledWorkflow(expected) {
 export function summarizePreviewItem(item) {
   const json = item?.json || {};
   return {
-    mode: json.mode, deliveryEnabled: json.deliveryEnabled === true,
+    mode: json.mode, deliveryEnabled: json.deliveryEnabled !== false,
     deliveryMode: json.deliveryMode, to: json.to || null,
     intendedRecipient: json.intendedRecipient ? { supplierId: json.intendedRecipient.supplierId, name: json.intendedRecipient.name, email: json.intendedRecipient.email } : null,
     supplierId: json.supplierId ?? null, checkedProducts: json.checkedProducts, checkedOrders: json.checkedOrders,
@@ -105,43 +106,71 @@ export function summarizePreviewItem(item) {
   };
 }
 
-export function verifyLocalPreviews() {
+export function createPreviewReport(workflow, result) {
+  let run;
+  try { run = parseCliJson(result.stdout || '', (value) => Boolean(value?.data?.resultData || value?.resultData || value?.data?.runData || value?.runData)); }
+  catch { /* Do not expose raw, potentially credential-bearing output. */ }
+  const data = run?.data?.resultData || run?.resultData || run?.data || run;
+  const runs = data?.runData && typeof data.runData === 'object' && !Array.isArray(data.runData) ? data.runData : {};
+  const known = new Set(workflow.nodes.map((node) => node.name));
+  const entries = Object.entries(runs);
+  const validRuns = entries.every(([name, rows]) => known.has(name) && Array.isArray(rows) && rows.length > 0 && rows.every((row) => row && !row.error && (!row.executionStatus || row.executionStatus === 'success')));
+  const deliveryPathPresent = ['Prepare Discord message', 'Send Discord notification', 'Remember successful delivery'].some((name) => Object.hasOwn(runs, name));
+  const previewRuns = runs['Preview only'];
+  const previewShape = Array.isArray(previewRuns) && previewRuns.every((entry) => Array.isArray(entry?.data?.main) && entry.data.main.every(Array.isArray));
+  const previewItems = previewShape ? previewRuns.flatMap((entry) => entry.data.main.flat()) : [];
+  const validPreview = previewItems.every((item) => item?.json && !item.json.error && item.json.deliveryEnabled === false);
+  const preview = previewItems.map(summarizePreviewItem);
+  const calls = (pattern) => entries.filter(([name]) => pattern.test(name)).reduce((count, [, rows]) => count + (Array.isArray(rows) ? rows.length : 1), 0);
+  const notificationCalls = calls(/^Send Discord notification$/);
+  const gmailCalls = calls(/gmail/i);
+  const openAiCalls = calls(/openai|language model|\bagent\b/i);
+  const envelopeSuccess = run && !run.error && (run.finished === undefined || run.finished === true) && (run.status === undefined || run.status === 'success');
+  const success = result.status === 0 && envelopeSuccess && !data?.error && validRuns && !deliveryPathPresent && validPreview && data?.lastNodeExecuted === 'Preview only' && preview.length > 0 && notificationCalls === 0 && gmailCalls === 0 && openAiCalls === 0;
+  const report = { id: workflow.id, success: Boolean(success), lastNode: known.has(data?.lastNodeExecuted) ? data.lastNodeExecuted : null, preview, notificationCalls, gmailCalls, openAiCalls };
+  if (!report.success) report.error = 'CLI verification did not finish safely at the preview node. Raw credential-bearing output was withheld.';
+  return report;
+}
+
+export function verifyLocalPreviews({
+  projectRoot = root, readWorkflow = (mode) => JSON.parse(readFileSync(path.join(projectRoot, `automations/workflows/stockflow-${mode}.json`), 'utf8')),
+  assertLocal = assertLocalN8n, inspectWorkflow = inspectInstalledWorkflow,
+  executeWorkflow = (id) => spawnSync('docker', ['exec', '-e', 'N8N_RUNNERS_BROKER_PORT=5680', 'n8n', 'n8n', 'execute', `--id=${id}`, '--rawOutput'], { encoding: 'utf8', maxBuffer: 15 * 1024 * 1024, timeout: 120000, windowsHide: true }),
+  writeReport = (value) => {
+    mkdirSync(path.join(projectRoot, '.local'), { recursive: true });
+    writeFileSync(path.join(projectRoot, '.local/automation-verification.json'), JSON.stringify(value, null, 2), { mode: 0o600 });
+  }, log = console.log,
+} = {}) {
   const sources = Object.entries(WORKFLOW_MODES).map(([id, mode]) => {
-    const workflow = JSON.parse(readFileSync(path.join(root, `automations/workflows/stockflow-${mode}.json`), 'utf8'));
+    const workflow = readWorkflow(mode);
     if (workflow.id !== id) throw new Error(`Unexpected workflow ID in the ${mode} template. No workflow executed.`);
     assertSafePreviewSource(workflow, mode);
     return workflow;
   });
+  try { assertLocal(); }
+  catch { throw new Error('Cannot verify the owned local n8n runtime. No workflow executed; private output was withheld.'); }
   // Inspect every workflow before executing any. A single live or edited workflow blocks the entire verifier.
-  for (const workflow of sources) inspectInstalledWorkflow(workflow);
+  for (const workflow of sources) inspectWorkflow(workflow);
   const reports = [];
   for (const workflow of sources) {
     const { id } = workflow;
     // Recheck immediately before each run in case someone edited a workflow after the full preflight.
-    inspectInstalledWorkflow(workflow);
+    inspectWorkflow(workflow);
     // A separate broker port lets the supported CLI run beside the n8n daemon.
     // Raw CLI output stays in memory because it contains the short-lived API JWT.
-    const result = spawnSync('docker', ['exec', '-e', 'N8N_RUNNERS_BROKER_PORT=5680', 'n8n', 'n8n', 'execute', `--id=${id}`, '--rawOutput'], { encoding: 'utf8', maxBuffer: 15 * 1024 * 1024, timeout: 120000 });
-    const raw = result.stdout || '';
-    let run;
-    for (let index = raw.indexOf('{'); index >= 0 && !run; index = raw.indexOf('{', index + 1)) {
-      try { run = JSON.parse(raw.slice(index)); } catch { /* CLI setup lines precede JSON. */ }
-    }
-    const data = run?.data?.resultData || run?.resultData || run?.data || run;
-    const runs = data?.runData || {};
-    const preview = runs['Preview only']?.flatMap((entry) => entry.data?.main?.flat() || []).map(summarizePreviewItem) || [];
-    const notificationCalls = runs['Send Discord notification']?.length || 0;
-    const gmailCalls = Object.entries(runs).filter(([name]) => /gmail/i.test(name)).reduce((total, [, entries]) => total + (entries?.length || 0), 0);
-    const report = { id, success: result.status === 0 && !data?.error && preview.length > 0 && notificationCalls === 0 && gmailCalls === 0 && preview.every((entry) => entry.deliveryEnabled === false), lastNode: data?.lastNodeExecuted, preview, notificationCalls, gmailCalls, openAiCalls: 0 };
-    if (!report.success) report.error = 'CLI verification did not finish safely at the preview node. Raw credential-bearing output was withheld.';
+    let result;
+    try { result = executeWorkflow(id); }
+    catch { result = { status: 1, stdout: '' }; }
+    const report = createPreviewReport(workflow, result);
     reports.push(report);
-    console.log(JSON.stringify(report));
-    if (notificationCalls > 0 || gmailCalls > 0) break;
+    log(JSON.stringify(report));
+    if (!report.success) break;
   }
-  mkdirSync(path.join(root, '.local'), { recursive: true });
-  writeFileSync(path.join(root, '.local/automation-verification.json'), JSON.stringify({ checkedAt: new Date().toISOString(), reports }, null, 2));
-  if (reports.some((report) => !report.success || report.notificationCalls !== 0 || report.gmailCalls !== 0)) process.exitCode = 1;
+  writeReport({ checkedAt: new Date().toISOString(), reports });
   return reports;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) verifyLocalPreviews();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const reports = verifyLocalPreviews();
+  if (reports.some((report) => !report.success)) process.exitCode = 1;
+}
