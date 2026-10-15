@@ -68,7 +68,7 @@ To generate the current private account document after setting up demo accounts:
 node scripts/write-login-doc.mjs
 ```
 
-See [demo catalog setup](DEMO-DATA.md) for the additional profiles/products and [local automation setup](../automations/README.md) for n8n and Gmail delivery settings. Running the development launcher does not enable Gmail delivery or call OpenAI.
+See [demo catalog setup](DEMO-DATA.md) for the additional profiles/products and [local automation setup](../automations/README.md) for n8n and Discord delivery settings. Running the development launcher preserves existing workflow activation settings; it does not newly enable delivery or call OpenAI.
 
 ## Troubleshooting
 

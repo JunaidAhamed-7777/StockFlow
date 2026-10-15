@@ -43,9 +43,9 @@ Five rule-based workflows are available locally and default to preview mode:
 - Weekly inventory data-quality audit on Monday at 09:30 Asia/Kolkata, only when issues exist.
 - New and changed order alerts every 15 minutes, with an initial baseline that suppresses historical messages.
 
-**All outbound workflow email is redirected to `junuhammad2@gmail.com`.** Each email explicitly identifies its intended owner/administrator and their recorded address; no owner is added to To, CC, or BCC. Reserved demo addresses may appear as intended-recipient metadata but never as actual destinations. See [mail routing](automations/MAIL-ROUTING.md).
+**StockFlow notifications use one chosen Discord channel.** Each post explicitly identifies its intended owner/administrator and recorded address; owners receive no emails or direct messages. At-signs display as `[at]` to neutralize Discord mention syntax. Reserved demo addresses are attribution only. See [notification routing](automations/MAIL-ROUTING.md).
 
-**Delivery remains disabled until send-only Gmail OAuth is connected in n8n.** The n8n sign-in credentials do not authorize Gmail. Follow [automation setup](automations/README.md), then use the guarded updater to enable only low-stock delivery. The other workflows remain in preview until deliberately enabled. No email was sent during the current disconnected tests.
+**Gmail OAuth setup was canceled in favor of Discord incoming webhooks.** No Google client or bot OAuth is required. Follow [Discord setup](automations/DISCORD.md): import the private webhook into encrypted n8n storage, confirm one labeled test, then enable only critical stock alerts. The other workflows remain in preview. Source templates always default to disabled delivery.
 
 These workflows make no OpenAI calls. The root OpenAI API key stays private and is not needed for stock rules. AI forecast/recommendation endpoints remain unimplemented; the UI shows that limitation honestly.
 

@@ -63,4 +63,4 @@ for (const file of ['stockflow-low-stock.json', 'stockflow-daily-digest.json', '
 if (missing.length || workflowIds.some(id => !activeIds.includes(id))) docker(['restart', 'n8n']);
 const previousStatus = existsSync(path.join(local, 'automation-status.json')) ? JSON.parse(readFileSync(path.join(local, 'automation-status.json'), 'utf8')) : {};
 writeFileSync(path.join(local, 'automation-status.json'), JSON.stringify({ ...previousStatus, installedAt: new Date().toISOString(), workflows: workflowIds, note: 'New templates start in preview; existing workflow delivery settings were preserved. Use update-local.mjs to apply source changes.', openAiCalls: 0 }, null, 2));
-console.log('n8n workflows installed locally. New workflows start in preview; existing delivery settings were preserved. No test mail or OpenAI calls made.');
+console.log('n8n workflows installed locally. New workflows start in preview; existing delivery settings were preserved. No test messages or OpenAI calls made.');
