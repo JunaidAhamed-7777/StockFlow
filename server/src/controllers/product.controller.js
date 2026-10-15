@@ -1,8 +1,10 @@
-const { getAll, getById, createProduct, updateProduct, deleteProduct } = require('../services/productService');
+const { getAll, getById, createProduct, updateProduct, deleteProduct, getProductPage } = require('../services/productService');
+const { pageRequested } = require('../services/readQuery');
 const { authorize } = require('../middleware/authorize');
 
 const listProducts = async (req, res, next) => {
   try {
+    if (pageRequested(req.query)) return res.json(await getProductPage(req.query));
     const filters = {
       search: req.query.search,
       categoryId: req.query.category ? Number(req.query.category) : undefined,

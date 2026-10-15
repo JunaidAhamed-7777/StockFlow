@@ -1,4 +1,5 @@
 const prisma = require('../prismaClient');
+const { getProductPage } = require('./pagedReadService').createPagedReads(prisma);
 
 const createProduct = async ({ name, description, sku, price, quantity, lowStockThreshold, categoryId, supplierId }) => {
   // Basic validation
@@ -79,4 +80,4 @@ const getById = async (id) => {
   return product;
 };
 
-module.exports = { createProduct, updateProduct, deleteProduct, getAll, getById };
+module.exports = { createProduct, updateProduct, deleteProduct, getAll, getById, getProductPage };
