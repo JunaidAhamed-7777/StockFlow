@@ -19,10 +19,18 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
 
   async function onSubmit(event) {
     event.preventDefault();
-    if (!product) return;
+    if (!product || saving) return;
     const change = Number(quantityChange);
-    if (!Number.isInteger(change) || change === 0) {
+    if (!Number.isSafeInteger(change) || change === 0) {
       setError("Enter a non-zero whole number for the quantity change.");
+      return;
+    }
+    if (!Number.isSafeInteger(Number(product.quantity) + change) || Number(product.quantity) + change < 0) {
+      setError("This adjustment would put stock below zero or exceed the supported quantity. Enter a smaller change.");
+      return;
+    }
+    if (!reason.trim()) {
+      setError("Enter a reason so the stock change can be traced in the audit history.");
       return;
     }
     setSaving(true);
@@ -50,10 +58,10 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
     <Modal
       open={open}
       title={`Adjust stock · ${product.sku}`}
-      onClose={onClose}
+      onClose={() => { if (!saving) onClose(); }}
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" disabled={saving} onClick={onClose}>Cancel</Button>
           <Button type="submit" form="stock-adjust-form" loading={saving}>Apply adjustment</Button>
         </>
       }
@@ -68,12 +76,15 @@ export function StockAdjustModal({ product, open, onClose, onAdjusted }) {
           hint="Use a positive number to receive stock, or a negative number to issue stock."
           type="number"
           step="1"
+          min={-Number(product.quantity)}
+          disabled={saving}
           value={quantityChange}
           onChange={(e) => setQuantityChange(e.target.value)}
           required
         />
-        <Textarea id="reason" label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-        {error ? <p className="font-caption text-caption text-error">{error}</p> : null}
+        <p className="font-body-sm">Quantity after adjustment: <strong className="font-mono-data">{Number.isSafeInteger(Number(quantityChange)) ? Number(product.quantity) + Number(quantityChange) : "—"}</strong></p>
+        <Textarea id="reason" label="Reason for adjustment" placeholder="For example: supplier delivery received, or damaged units removed" maxLength={500} disabled={saving} required value={reason} onChange={(e) => setReason(e.target.value)} />
+        {error ? <p className="font-caption text-caption text-error" role="alert">{error}</p> : null}
       </form>
     </Modal>
   );

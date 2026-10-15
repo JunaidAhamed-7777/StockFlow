@@ -10,6 +10,7 @@ import { getErrorMessage } from "../utils/errors";
 import { createProduct, getProduct, updateProduct } from "../services/product.service";
 import { getCategories, getSuppliers } from "../services/discovery.service";
 import { useAuth } from "../context/AuthContext";
+import { Loading } from "./ui/Loading";
 
 const emptyForm = {
   name: "",
@@ -32,12 +33,15 @@ export function ProductForm({ productId, cancelTo, successTo }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError("");
+      setLoadError("");
       try {
         const [cats, sups] = await Promise.all([getCategories(), getSuppliers()]);
         if (cancelled) return;
@@ -57,12 +61,14 @@ export function ProductForm({ productId, cancelTo, successTo }) {
             supplierId: String(product.supplierId ?? ""),
           });
         } else if (role === "SUPPLIER" && supplier?.id) {
-          setForm((current) => ({ ...current, supplierId: String(supplier.id) }));
+          setForm({ ...emptyForm, supplierId: String(supplier.id) });
         } else if (role === "SUPPLIER") {
-          setError("No supplier profile is linked to this account. The catalog API cannot assign ownership until a supplier record exists.");
+          setLoadError("No supplier profile is linked to this account. A supplier profile is required to manage products.");
+        } else {
+          setForm(emptyForm);
         }
       } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err));
+        if (!cancelled) setLoadError(getErrorMessage(err));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -71,7 +77,7 @@ export function ProductForm({ productId, cancelTo, successTo }) {
     return () => {
       cancelled = true;
     };
-  }, [isEdit, productId, role, supplier?.id]);
+  }, [isEdit, productId, role, supplier?.id, reloadKey]);
 
   function setField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -79,25 +85,26 @@ export function ProductForm({ productId, cancelTo, successTo }) {
 
   async function onSubmit(event) {
     event.preventDefault();
+    if (saving) return;
     setSaving(true);
     setError("");
     const payload = {
       name: form.name.trim(),
-      description: form.description.trim() || undefined,
+      description: form.description.trim(),
       sku: form.sku.trim(),
       price: Number(form.price),
       quantity: Number(form.quantity),
       lowStockThreshold: Number(form.lowStockThreshold),
       categoryId: Number(form.categoryId),
     };
-    if (Number.isNaN(payload.categoryId) || Number.isNaN(payload.price) || Number.isNaN(payload.quantity) || Number.isNaN(payload.lowStockThreshold)) {
-      setError("Price, quantity, threshold, and category must be valid numbers.");
+    if (!payload.name || !payload.sku || !Number.isSafeInteger(payload.categoryId) || payload.categoryId < 1 || !Number.isFinite(payload.price) || payload.price < 0 || !Number.isSafeInteger(payload.quantity) || payload.quantity < 0 || !Number.isSafeInteger(payload.lowStockThreshold) || payload.lowStockThreshold < 0 || form.price === "" || form.quantity === "" || form.lowStockThreshold === "") {
+      setError("Enter a name, SKU and category, a valid non-negative price, and non-negative whole numbers for stock and threshold.");
       setSaving(false);
       return;
     }
     if (role === "ADMIN") {
       payload.supplierId = Number(form.supplierId);
-      if (Number.isNaN(payload.supplierId)) {
+      if (!Number.isSafeInteger(payload.supplierId) || payload.supplierId < 1) {
         setError("Select a supplier.");
         setSaving(false);
         return;
@@ -123,8 +130,9 @@ export function ProductForm({ productId, cancelTo, successTo }) {
   }
 
   if (loading) {
-    return <div className="font-body-sm text-on-surface-variant">Loading specification form…</div>;
+    return <Loading label="Loading product form…" />;
   }
+  if (loadError) return <ErrorState message={loadError} onRetry={() => setReloadKey((value) => value + 1)} />;
 
   return (
     <>
@@ -136,11 +144,11 @@ export function ProductForm({ productId, cancelTo, successTo }) {
             <span className="text-secondary font-medium">{isEdit ? "Edit specification" : "Create SKU"}</span>
           </>
         }
-        title={isEdit ? "Edit Product Specification" : "Create Product Specification"}
-        description="Only fields accepted by the StockFlow catalog API are submitted."
+        title={isEdit ? "Edit product" : "Create product"}
+        description="Keep product information, pricing, and replenishment thresholds up to date."
         actions={
           <>
-            <Button variant="outline" onClick={() => navigate(cancelTo)}>Discard Changes</Button>
+            <Button variant="outline" disabled={saving} onClick={() => navigate(cancelTo)}>Cancel</Button>
             <Button variant="dark" type="submit" form="product-form" loading={saving} disabled={role === "SUPPLIER" && !supplier?.id} icon={<Icon name="publish" size={16} />}>
               {isEdit ? "Save SKU" : "Publish SKU"}
             </Button>
@@ -148,15 +156,17 @@ export function ProductForm({ productId, cancelTo, successTo }) {
         }
       />
       {error ? <ErrorState message={error} /> : null}
-      <form id="product-form" onSubmit={onSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-space-xl">
+      <form id="product-form" onSubmit={onSubmit}>
+      <fieldset disabled={saving} className="grid grid-cols-1 lg:grid-cols-12 gap-space-xl min-w-0">
+        <legend className="sr-only">Product information</legend>
         <Card className="lg:col-span-8 p-space-xl flex flex-col gap-space-md">
           <div className="flex items-center gap-space-xs">
             <Icon name="fingerprint" className="text-secondary" />
             <h2 className="font-headline-sm text-headline-sm">Core Identification</h2>
           </div>
-          <Input id="name" label="Product name" value={form.name} onChange={(e) => setField("name", e.target.value)} required />
+          <Input id="name" label="Product name" maxLength={200} value={form.name} onChange={(e) => setField("name", e.target.value)} required />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
-            <Input id="sku" label="SKU" value={form.sku} onChange={(e) => setField("sku", e.target.value)} required />
+            <Input id="sku" label="SKU" maxLength={100} value={form.sku} onChange={(e) => setField("sku", e.target.value)} required />
             <Select id="categoryId" label="Category" value={form.categoryId} onChange={(e) => setField("categoryId", e.target.value)} required>
               <option value="">Select category</option>
               {categories.map((category) => (
@@ -164,7 +174,7 @@ export function ProductForm({ productId, cancelTo, successTo }) {
               ))}
             </Select>
           </div>
-          <Textarea id="description" label="Description" value={form.description} onChange={(e) => setField("description", e.target.value)} />
+          <Textarea id="description" label="Description" maxLength={4000} value={form.description} onChange={(e) => setField("description", e.target.value)} />
         </Card>
         <Card className="lg:col-span-4 p-space-xl flex flex-col gap-space-md">
           <div className="flex items-center gap-space-xs">
@@ -172,8 +182,8 @@ export function ProductForm({ productId, cancelTo, successTo }) {
             <h2 className="font-headline-sm text-headline-sm">Pricing & Stock</h2>
           </div>
           <Input id="price" label="Unit price" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setField("price", e.target.value)} required />
-          <Input id="quantity" label="On-hand quantity" type="number" min="0" step="1" value={form.quantity} onChange={(e) => setField("quantity", e.target.value)} required />
-          <Input id="lowStockThreshold" label="Low-stock threshold" type="number" min="0" step="1" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} required />
+          <Input id="quantity" label="On-hand quantity" type="number" min="0" max="2147483647" step="1" value={form.quantity} onChange={(e) => setField("quantity", e.target.value)} required />
+          <Input id="lowStockThreshold" label="Low-stock threshold" hint="Flag this product when stock reaches this quantity or lower." type="number" min="0" max="2147483647" step="1" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} required />
           {role === "ADMIN" ? (
             <Select id="supplierId" label="Supplier" value={form.supplierId} onChange={(e) => setField("supplierId", e.target.value)} required>
               <option value="">Select supplier</option>
@@ -188,6 +198,7 @@ export function ProductForm({ productId, cancelTo, successTo }) {
           )}
           <Button type="submit" variant="dark" loading={saving} disabled={role === "SUPPLIER" && !supplier?.id}>{isEdit ? "Save changes" : "Create product"}</Button>
         </Card>
+      </fieldset>
       </form>
     </>
   );
