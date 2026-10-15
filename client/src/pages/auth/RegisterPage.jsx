@@ -27,7 +27,10 @@ export function RegisterPage() {
 
   async function onSubmit(event) {
     event.preventDefault();
+    if (saving) return;
     if (step === 1) {
+      if (!form.name.trim()) { setError("Enter your full name."); return; }
+      setError("");
       setStep(2);
       return;
     }
@@ -57,7 +60,7 @@ export function RegisterPage() {
       <div className="w-full bg-surface-container-high px-space-xl py-space-sm flex items-center justify-between">
         <div className="flex items-center gap-space-md">
           <img src={logo} alt="StockFlow" className="h-6 w-6" />
-          <span className="font-label-sm">Verified tenant provisioning</span>
+          <span className="font-label-sm">StockFlow account registration</span>
         </div>
         <Link to="/login" className="font-label-sm text-secondary">Back to sign in</Link>
       </div>
@@ -87,29 +90,30 @@ export function RegisterPage() {
             <div className="bg-secondary h-full rounded-full transition-all" style={{ width: step === 1 ? "50%" : "100%" }} />
           </div>
         </div>
-        <form onSubmit={onSubmit} className="bg-surface-container-lowest p-space-2xl rounded-xl shadow-sm flex flex-col gap-space-lg">
+        <form onSubmit={onSubmit} aria-busy={saving} className="bg-surface-container-lowest p-space-lg sm:p-space-2xl rounded-xl border border-outline-variant shadow-sm flex flex-col gap-space-lg">
           <div>
             <h1 className="font-headline-lg">Register a StockFlow account</h1>
             <p className="font-body-sm text-on-surface-variant">
-              The backend accepts name, email, password, and role. Facility, EDI, and DC fields from the Stitch wizard are not collected because those APIs are not available.
+              Create a procurement or supplier account. Your account opens the workspace for your selected role.
             </p>
           </div>
           {step === 1 ? (
             <>
-              <Input id="name" label="Full name" value={form.name} onChange={(e) => setField("name", e.target.value)} required />
-              <Input id="email" label="Corporate email" type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} required />
+              <Input id="name" name="name" autoComplete="name" maxLength={100} label="Full name" value={form.name} onChange={(e) => setField("name", e.target.value)} required />
+              <Input id="email" name="email" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={254} label="Corporate email" type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} required />
               <Select id="role" label="Portal role" value={form.role} onChange={(e) => setField("role", e.target.value)}>
                 <option value="CUSTOMER">Customer / Procurement</option>
                 <option value="SUPPLIER">Supplier</option>
-                <option value="ADMIN">Admin</option>
               </Select>
+              {form.role === "SUPPLIER" ? <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-space-md">An administrator must provision your supplier profile before you can publish products.</p> : null}
+              {error ? <p role="alert" className="text-sm text-error">{error}</p> : null}
               <Button type="submit">Continue</Button>
             </>
           ) : (
             <>
-              <Input id="password" label="Password" type="password" value={form.password} onChange={(e) => setField("password", e.target.value)} required />
-              <Input id="confirmPassword" label="Confirm password" type="password" value={form.confirmPassword} onChange={(e) => setField("confirmPassword", e.target.value)} required />
-              {error ? <p className="font-body-sm text-error">{error}</p> : null}
+              <Input id="password" name="password" autoComplete="new-password" minLength={12} maxLength={72} hint="Use a unique passphrase of 12–72 characters." disabled={saving} label="Password" type="password" value={form.password} onChange={(e) => setField("password", e.target.value)} required />
+              <Input id="confirmPassword" name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={72} disabled={saving} label="Confirm password" type="password" value={form.confirmPassword} onChange={(e) => setField("confirmPassword", e.target.value)} required />
+              {error ? <p role="alert" className="font-body-sm text-error">{error}</p> : null}
               <div className="flex gap-space-sm">
                 <Button variant="outline" type="button" onClick={() => setStep(1)}>Back</Button>
                 <Button type="submit" loading={saving}>Create account</Button>
