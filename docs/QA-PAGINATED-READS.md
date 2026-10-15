@@ -124,4 +124,3 @@ screenshots `paged-order-filter-refresh.jpg`, `paged-products-outage.jpg`,
 `paged-supplier-directory.jpg`. No credentials or screenshot binaries are
 committed. An earlier generated-client temp folder was preserved after automatic
 approval review blocked recursive removal; subsequent runner cleanup succeeded.
-
