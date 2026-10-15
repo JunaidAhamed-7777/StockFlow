@@ -65,7 +65,13 @@ export async function configureRoleAgents(args = process.argv.slice(2)) {
   dockerCapture(['restart', 'n8n']);
   let healthy = false;
   for (let attempt = 0; attempt < 50; attempt++) {
-    try { healthy = (await fetch('http://localhost:5678/healthz', { signal: AbortSignal.timeout(1500) })).ok; } catch { /* Preserve credentials while startup completes. */ }
+    try {
+      // The health endpoint can respond before the optional Agents module registers its routes.
+      const ready = await api.request('GET', `/${adminAgentId}`);
+      healthy = ready.id === adminAgentId;
+    } catch (error) {
+      if (error.status !== 404 && error.status !== 503 && error.message !== 'Local n8n request could not be completed.') throw error;
+    }
     if (healthy) break;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
@@ -75,7 +81,7 @@ export async function configureRoleAgents(args = process.argv.slice(2)) {
   for (const plan of ROLE_AGENT_PLANS) {
     const id = plan.role === 'ADMIN' ? adminAgentId : plan.id;
     let agent;
-    try { agent = await api.request('GET', `/${id}`); } catch (error) { if (error.status !== 404) throw error; }
+    try { agent = await api.request('GET', `/${id}`); } catch (error) { if (error.status !== 404 || plan.role === 'ADMIN') throw error; }
     const config = createRoleAgentConfig(plan, agent?.name || plan.name);
     if (!agent) await api.request('POST', '', { id, name: plan.name, schema: config });
     else {
