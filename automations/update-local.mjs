@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { validateRuntimeConfig, validateN8nContainer } from '../scripts/runtime-safety.mjs';
-import { validateGmailCredential } from './gmail-config.mjs';
+import { validateDiscordCredential, assertConfirmedDiscordTest } from './discord-config.mjs';
+import { exportLocalCredential } from './local-n8n.mjs';
 import './build-workflows.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,8 +14,8 @@ const args = process.argv.slice(2);
 const enableLowStock = args.includes('--enable-low-stock');
 const apply = args.includes('--apply');
 const deferRestart = args.includes('--defer-restart');
-const idOption = args.find(value => value.startsWith('--gmail-credential-id='));
-if (args.some(value => !['--apply', '--enable-low-stock', '--defer-restart'].includes(value) && !value.startsWith('--gmail-credential-id='))) throw new Error('Usage: node automations/update-local.mjs [--apply] [--enable-low-stock] [--gmail-credential-id=ID] [--defer-restart]');
+const idOption = args.find(value => value.startsWith('--discord-credential-id='));
+if (args.some(value => !['--apply', '--enable-low-stock', '--defer-restart'].includes(value) && !value.startsWith('--discord-credential-id='))) throw new Error('Usage: node automations/update-local.mjs [--apply] [--enable-low-stock] [--discord-credential-id=ID] [--defer-restart]');
 if (enableLowStock && deferRestart) throw new Error('Live activation must include a restart and verification.');
 const runtime = JSON.parse(readFileSync(path.join(local, 'runtime.json'), 'utf8'));
 validateRuntimeConfig(runtime);
@@ -33,31 +34,26 @@ try {
 } finally { docker(['exec', 'n8n', 'node', '-e', `require('fs').rmSync('${exportPath}',{force:true})`]); }
 const byId = new Map(current.map(workflow => [workflow.id, workflow]));
 const sources = readdirSync(path.join(root, 'automations/workflows')).filter(file => /^stockflow-[a-z-]+\.json$/.test(file)).map(file => JSON.parse(readFileSync(path.join(root, 'automations/workflows', file), 'utf8')));
-const credentialId = idOption?.slice('--gmail-credential-id='.length) || byId.get('StockFlowCritical01')?.nodes.find(node => node.name === 'Send owner Gmail')?.credentials?.gmailOAuth2?.id;
-let gmail;
+const credentialId = idOption?.slice('--discord-credential-id='.length) || byId.get('StockFlowCritical01')?.nodes.find(node => node.name === 'Send Discord notification')?.credentials?.discordWebhookApi?.id;
+let discord;
+let confirmation;
+if (credentialId) discord = validateDiscordCredential(exportLocalCredential(credentialId), credentialId);
 if (enableLowStock) {
-  if (!credentialId || !/^[a-zA-Z0-9_-]{1,64}$/.test(credentialId)) throw new Error('Choose the connected Gmail credential with --gmail-credential-id=ID before enabling delivery.');
-  // The supported CLI can check encrypted credentials. Its decrypted stdout stays only in memory.
-  const raw = docker(['exec', 'n8n', 'n8n', 'export:credentials', `--id=${credentialId}`, '--decrypted']);
-  let credentials;
-  for (let start = raw.indexOf('['); start >= 0 && !credentials; start = raw.indexOf('[', start + 1)) {
-    try { const value = JSON.parse(raw.slice(start, raw.lastIndexOf(']') + 1)); if (Array.isArray(value)) credentials = value; } catch { /* CLI notices can precede the JSON array. */ }
-  }
-  gmail = validateGmailCredential(credentials?.find(value => value.id === credentialId), credentialId);
+  if (!discord) throw new Error('Configure and test the Discord webhook before enabling delivery.');
+  confirmation = assertConfirmedDiscordTest(JSON.parse(readFileSync(path.join(local, 'discord-connection-test.json'), 'utf8')), discord);
 }
 const prepared = sources.map(source => {
   const previous = byId.get(source.id);
   source.staticData = previous?.staticData ?? null;
   const loginCredential = previous?.nodes.find(node => node.name === 'StockFlow login')?.credentials;
   if (loginCredential) source.nodes.find(node => node.name === 'StockFlow login').credentials = loginCredential;
-  const existingGmail = previous?.nodes.find(node => node.name === 'Send owner Gmail')?.credentials?.gmailOAuth2;
-  if (gmail || existingGmail) source.nodes.find(node => node.name === 'Send owner Gmail').credentials = { gmailOAuth2: gmail || existingGmail };
+  if (discord) source.nodes.find(node => node.name === 'Send Discord notification').credentials = { discordWebhookApi: { id: discord.id, name: discord.name } };
   const settings = source.nodes.find(node => node.name === 'Settings').parameters;
-  if (!settings.jsCode.includes("deliveryMode: 'redirect'") || !settings.jsCode.includes("redirectTo: 'junuhammad2@gmail.com'") || !settings.jsCode.includes('mailEnabled: false')) throw new Error('Source settings do not match the safe redirected template.');
-  if (enableLowStock && source.id === 'StockFlowCritical01') settings.jsCode = settings.jsCode.replace('mailEnabled: false', 'mailEnabled: true');
+  if (!settings.jsCode.includes("deliveryMode: 'discord'") || !settings.jsCode.includes('notificationsEnabled: false')) throw new Error('Source settings do not match the disabled Discord template.');
+  if (enableLowStock && source.id === 'StockFlowCritical01') settings.jsCode = settings.jsCode.replace('notificationsEnabled: false', 'notificationsEnabled: true');
   return source;
 });
-const summary = { apply, destination: 'junuhammad2@gmail.com', workflows: prepared.map(workflow => ({ id: workflow.id, name: workflow.name, deliveryEnabled: enableLowStock && workflow.id === 'StockFlowCritical01', existingStatePreserved: byId.has(workflow.id) })) };
+const summary = { apply, provider: 'Discord', destination: 'one configured channel', workflows: prepared.map(workflow => ({ id: workflow.id, name: workflow.name, deliveryEnabled: enableLowStock && workflow.id === 'StockFlowCritical01', existingStatePreserved: byId.has(workflow.id) })) };
 console.log(JSON.stringify(summary, null, 2));
 if (!apply) process.exit(0);
 const backup = path.join(local, 'n8n-backups', batch);
@@ -92,5 +88,5 @@ if (!deferRestart) {
   }
   if (!healthy) throw new Error('n8n did not become healthy after publishing. Check local Docker logs.');
 }
-writeFileSync(path.join(local, 'automation-status.json'), JSON.stringify({ installedAt: new Date().toISOString(), workflows: prepared.map(workflow => workflow.id), deliveryMode: 'redirect', redirectTo: summary.destination, enabledWorkflows: enableLowStock ? ['StockFlowCritical01'] : [], restartPending: deferRestart, gmailCredentialId: gmail?.id || null, reason: enableLowStock ? 'Low-stock mail enabled with send-only Gmail OAuth. All other workflows remain in preview.' : 'All workflows installed with redirected routing; Gmail delivery awaits OAuth connection.', openAiCalls: 0 }, null, 2));
+writeFileSync(path.join(local, 'automation-status.json'), JSON.stringify({ installedAt: new Date().toISOString(), workflows: prepared.map(workflow => workflow.id), deliveryMode: 'discord', destination: summary.destination, enabledWorkflows: enableLowStock ? ['StockFlowCritical01'] : [], restartPending: deferRestart, discordCredentialId: discord?.id || null, channelId: confirmation?.channelId || null, gmailCanceled: true, reason: enableLowStock ? 'Critical-stock alerts enabled for the confirmed Discord channel. All other workflows remain previews.' : 'Discord workflows installed with delivery disabled.', openAiCalls: 0 }, null, 2));
 console.log('Local workflow update complete. Existing delivery markers and order baselines were preserved.');
