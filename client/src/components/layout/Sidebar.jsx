@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 import logo from "../../assets/logo.svg";
 import { useAuth } from "../../context/AuthContext";
 import { useApiHealth } from "../../hooks/useApiHealth";
-import { portalLabel, roleSubtitle } from "../../utils/roles";
+import { portalLabel } from "../../utils/roles";
 import { Icon } from "../ui/Icon";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -11,57 +11,57 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 const NAV = {
   ADMIN: [
     {
-      section: "Core",
+      section: "Inventory",
       items: [
         { to: "/admin/dashboard", label: "Overview", icon: "grid_view" },
-        { to: "/admin/ai", label: "AI & Automation", icon: "auto_graph" },
-        { to: "/admin/products", label: "Inventory & SKUs", icon: "inventory_2" },
-        { to: "/admin/inventory", label: "Stock Control", icon: "warehouse" },
+        { to: "/admin/ai", label: "Automations", icon: "hub" },
+        { to: "/admin/products", label: "Products", icon: "inventory_2" },
+        { to: "/admin/inventory", label: "Stock", icon: "warehouse" },
       ],
     },
     {
-      section: "Procurement & Supply",
+      section: "Suppliers",
       items: [{ to: "/admin/suppliers", label: "Suppliers", icon: "local_shipping" }],
     },
     {
-      section: "Sales & Fulfillment",
+      section: "Sales",
       items: [
-        { to: "/admin/orders", label: "Sales Orders", icon: "shopping_cart" },
+        { to: "/admin/orders", label: "Orders", icon: "shopping_cart" },
         { to: "/admin/customers", label: "Customers", icon: "groups" },
       ],
     },
     {
-      section: "System & Governance",
+      section: "Account",
       items: [
-        { to: "/admin/stock-transactions", label: "Stock Transactions", icon: "swap_horiz" },
-        { to: "/admin/profile", label: "Roles & Profile", icon: "admin_panel_settings" },
+        { to: "/admin/stock-transactions", label: "Stock transactions", icon: "swap_horiz" },
+        { to: "/admin/profile", label: "Profile", icon: "person" },
       ],
     },
   ],
   SUPPLIER: [
     {
-      section: "Fulfillment & Inventory",
+      section: "Workspace",
       items: [
         { to: "/supplier/dashboard", label: "Dashboard", icon: "grid_view" },
-        { to: "/supplier/products", label: "Supplier Products", icon: "inventory_2" },
-        { to: "/supplier/products/new", label: "Add / Edit Product", icon: "edit_note" },
-        { to: "/supplier/orders", label: "Supplier Orders", icon: "local_shipping" },
-        { to: "/supplier/stock", label: "Stock Management", icon: "warehouse" },
+        { to: "/supplier/products", label: "Products", icon: "inventory_2" },
+        { to: "/supplier/products/new", label: "Add product", icon: "add_box" },
+        { to: "/supplier/orders", label: "Orders", icon: "local_shipping" },
+        { to: "/supplier/stock", label: "Stock", icon: "warehouse" },
       ],
     },
     {
       section: "Account",
-      items: [{ to: "/supplier/profile", label: "Profile & Settings", icon: "verified" }],
+      items: [{ to: "/supplier/profile", label: "Profile", icon: "person" }],
     },
   ],
   CUSTOMER: [
     {
-      section: "Procurement",
+      section: "Purchasing",
       items: [
         { to: "/customer/dashboard", label: "Dashboard", icon: "grid_view" },
-        { to: "/customer/products", label: "Product Catalog", icon: "storefront" },
-        { to: "/customer/cart", label: "Wholesale Cart", icon: "shopping_cart" },
-        { to: "/customer/orders", label: "Orders & Dispatch", icon: "local_shipping" },
+        { to: "/customer/products", label: "Catalog", icon: "storefront" },
+        { to: "/customer/cart", label: "Cart", icon: "shopping_cart" },
+        { to: "/customer/orders", label: "Orders", icon: "local_shipping" },
       ],
     },
     {
@@ -72,7 +72,7 @@ const NAV = {
 };
 
 export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
-  const { role, user, supplier } = useAuth();
+  const { role, supplier } = useAuth();
   const sidebarRef = useRef(null);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const compact = collapsed && isDesktop;
@@ -82,7 +82,7 @@ export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
   }, [isDesktop, open]);
   const apiHealth = useApiHealth();
   const sections = NAV[role] || [];
-  const apiLabel = apiHealth === "live" ? "API live" : apiHealth === "down" ? "API down" : "API…";
+  const apiLabel = apiHealth === "live" ? "Service connected" : apiHealth === "down" ? "Service unavailable" : "Checking connection…";
 
   return (
     <>
@@ -112,21 +112,9 @@ export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
             <button type="button" className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-lg hover:bg-surface-container-low" onClick={onClose} aria-label="Close navigation"><Icon name="close" /></button>
           </div>
           {!compact ? (
-            <div className="p-space-sm border-b border-outline-variant bg-surface-container-low/50 shrink-0">
-              <div className="w-full flex items-center justify-between px-space-sm py-1.5 bg-surface-container-lowest rounded border border-outline-variant">
-                <div className="flex items-center gap-space-sm min-w-0">
-                  <div className="w-2 h-2 rounded-full bg-secondary shrink-0" />
-                  <div className="flex flex-col min-w-0 text-left">
-                    <span className="font-label-md text-label-md text-on-surface truncate">{portalLabel(role)}</span>
-                    <span className="font-caption text-caption text-on-surface-variant truncate">
-                      {supplier?.companyName || roleSubtitle(role)}
-                    </span>
-                  </div>
-                </div>
-                <span className="font-label-sm text-label-sm text-secondary bg-surface-container-high px-1 py-0.5 rounded border border-outline-variant shrink-0">
-                  {role === "ADMIN" ? "Ops" : role === "SUPPLIER" ? "VND" : "PO"}
-                </span>
-              </div>
+            <div className="px-space-base py-space-md border-b border-outline-variant shrink-0">
+              <p className="font-label-md text-label-md text-on-surface">{portalLabel(role)}</p>
+              {supplier?.companyName ? <p className="mt-space-2xs font-caption text-caption text-on-surface-variant break-words">{supplier.companyName}</p> : null}
             </div>
           ) : null}
           <div className="flex-1 overflow-y-auto px-space-xs py-space-sm space-y-space-md">
@@ -165,21 +153,12 @@ export function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
           <div className="flex items-center justify-between gap-space-xs">
             {!compact ? (
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  {apiHealth === "live" ? (
-                    <>
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-secondary" />
-                    </>
-                  ) : (
-                    <span className={`relative inline-flex rounded-full h-2 w-2 ${apiHealth === "down" ? "bg-error" : "bg-outline"}`} />
-                  )}
-                </span>
-                <span className="font-caption text-caption text-on-surface-variant truncate font-mono-data">{apiLabel} • {user?.email}</span>
+                <span aria-hidden="true" className={`inline-flex rounded-full h-2 w-2 shrink-0 ${apiHealth === "live" ? "bg-secondary" : apiHealth === "down" ? "bg-error" : "bg-outline"}`} />
+                <span className="font-caption text-caption text-on-surface-variant">{apiLabel}</span>
               </div>
             ) : null}
             <button
-              className="p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded transition-colors shrink-0 hidden lg:inline-flex"
+              className="h-9 w-9 items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded transition-colors shrink-0 hidden lg:inline-flex"
               title={collapsed ? "Expand navigation" : "Collapse navigation"}
               aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
               aria-expanded={!collapsed}
