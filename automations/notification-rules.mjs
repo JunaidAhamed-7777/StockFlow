@@ -1,13 +1,49 @@
 /** Pure rules shared by n8n Code nodes and offline tests. No AI or network calls. */
+export function resolveDeliverySettings({ deliveryMode = 'preview', redirectTo, mailEnabled = false } = {}) {
+  if (!['preview', 'redirect', 'owner'].includes(deliveryMode)) throw new Error('Unknown delivery mode; refusing to send mail.');
+  const target = typeof redirectTo === 'string' ? redirectTo.trim() : '';
+  const validEmail = (email) => /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(email) && !/@(?:.*\.)?(?:example\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) && !/\.(?:test|local|invalid|example)$/i.test(email);
+  if (deliveryMode === 'redirect' && !validEmail(target)) throw new Error('Redirect mode requires one valid, deliverable redirectTo address; refusing to send mail.');
+  return { deliveryMode, redirectTo: deliveryMode === 'redirect' ? target : undefined, mailEnabled: mailEnabled === true, deliveryEnabled: deliveryMode !== 'preview' && mailEnabled === true };
+}
+
+export function createOwnerNotification({ supplier, mode, subject, lines = [], events = [], deliveryMode, redirectTo, mailEnabled }) {
+  const delivery = resolveDeliverySettings({ deliveryMode, redirectTo, mailEnabled });
+  const email = typeof supplier.user?.email === 'string' ? supplier.user.email.trim() : '';
+  const validSyntax = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(email);
+  const reservedEmail = /@(?:.*\.)?(?:example\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) || /\.(?:test|local|invalid|example)$/i.test(email);
+  if (!validSyntax || (reservedEmail && delivery.deliveryMode !== 'redirect')) return null;
+  const safe = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, 180);
+  const owner = safe(supplier.user?.name || supplier.companyName || 'Stock owner');
+  const intendedRecipient = { supplierId: supplier.id, name: owner, email };
+  const redirected = delivery.deliveryMode === 'redirect';
+  const to = redirected ? delivery.redirectTo : email;
+  const routingNotice = redirected ? [
+    'REDIRECTED STOCKFLOW EMAIL — owner delivery is disabled.',
+    `Intended stock owner: ${owner}`,
+    `Intended owner email: ${email}`,
+    `Supplier ID: ${safe(supplier.id)}`,
+    `Actual testing destination: ${to}`,
+    'This email was redirected for testing. The intended owner was not emailed.',
+    '',
+  ] : [];
+  return {
+    kind: 'notification', mode, to, supplierId: supplier.id, intendedRecipient,
+    subject: `${redirected ? '[REDIRECTED] ' : ''}${safe(subject)}`,
+    message: [...routingNotice, `Hello ${owner},`, '', ...lines, '', 'Please review the current records in your StockFlow workspace before taking action.', 'This message uses recorded inventory and order data. It contains no AI predictions.', '', 'StockFlow Operations'].join('\n'),
+    events, deliveryMode: delivery.deliveryMode, deliveryEnabled: delivery.deliveryEnabled,
+  };
+}
+
 export function planNotifications(input) {
-  const { products, suppliers, orders = [], mode = 'low-stock', state = {}, now = Date.now(), criticalRatio = 0.5, reminderHours = 24, mailEnabled = false } = input;
+  const { products, suppliers, orders = [], mode = 'low-stock', state = {}, now = Date.now(), criticalRatio = 0.5, reminderHours = 24 } = input;
+  const delivery = resolveDeliverySettings(input);
   if (!Array.isArray(products) || !Array.isArray(suppliers) || !Array.isArray(orders)) throw new Error('Invalid inventory response; refusing to generate notifications.');
   if (!['low-stock', 'daily-digest', 'stale-orders'].includes(mode)) throw new Error('Unknown notification mode.');
   const sent = state.sent || {};
   const ratio = Math.min(1, Math.max(0, Number(criticalRatio) || 0.5));
   const cooldown = Math.max(1, Number(reminderHours) || 24) * 3600000;
   const day = new Date(now).toISOString().slice(0, 10);
-  const validEmail = (email) => typeof email === 'string' && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(email) && !/@(?:.*\.)?(?:example\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) && !/\.(?:test|local|invalid|example)$/i.test(email);
   const safe = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, 180);
   const stock = products.map((product) => {
     const quantity = product.quantity;
@@ -20,8 +56,7 @@ export function planNotifications(input) {
   for (const supplier of suppliers) {
     const own = stock.filter((product) => Number(product.supplierId) === Number(supplier.id));
     if (!own.length) continue;
-    const email = supplier.user?.email?.trim();
-    if (!validEmail(email)) { skipped.push({ supplierId: supplier.id, reason: 'Missing or non-deliverable owner email' }); continue; }
+    if (!createOwnerNotification({ supplier, mode, subject: '', ...delivery })) { skipped.push({ supplierId: supplier.id, reason: 'Missing or non-deliverable owner email' }); continue; }
     let lines = [];
     let events = [];
     let subject = '';
@@ -61,10 +96,9 @@ export function planNotifications(input) {
       subject = `StockFlow: ${lines.length} open ${lines.length === 1 ? 'order needs' : 'orders need'} follow-up`;
     }
     if (!events.length) continue;
-    const owner = safe(supplier.companyName || supplier.user?.name || 'Stock owner');
-    notifications.push({ kind: 'notification', mode, to: email, supplierId: supplier.id, subject, message: [`Hello ${owner},`, '', ...lines, '', 'Please review the current records in your StockFlow workspace before taking action.', 'This message uses recorded inventory and order data. It contains no AI predictions.', '', 'StockFlow Operations'].join('\n'), events, deliveryEnabled: mailEnabled === true });
+    notifications.push(createOwnerNotification({ supplier, mode, subject, lines, events, ...delivery }));
   }
-  return { notifications, skipped, checkedProducts: stock.length, mode, deliveryEnabled: mailEnabled === true };
+  return { notifications, skipped, checkedProducts: stock.length, mode, deliveryMode: delivery.deliveryMode, deliveryEnabled: delivery.deliveryEnabled };
 }
 
 export function recordSuccessfulDelivery(state, notification) {

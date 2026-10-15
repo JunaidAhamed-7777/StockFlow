@@ -1,25 +1,105 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearRecoveredStock, planNotifications, recordSuccessfulDelivery } from './notification-rules.mjs';
+import { clearRecoveredStock, createOwnerNotification, planNotifications, recordSuccessfulDelivery, resolveDeliverySettings } from './notification-rules.mjs';
 
 const NOW = Date.parse('2026-10-15T10:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
+const REDIRECT_TO = 'junuhammad2@gmail.com';
 const supplier = (overrides = {}) => ({ id: 1, companyName: 'Test Owner One', user: { email: 'owner@inventory-supplier-one.com' }, ...overrides });
 const product = (overrides = {}) => ({ id: 11, supplierId: 1, sku: 'ITEM-ONE', name: 'Desk supplies', quantity: 10, lowStockThreshold: 20, ...overrides });
 const input = (overrides = {}) => ({ products: [product()], suppliers: [supplier()], now: NOW, ...overrides });
 const notification = (overrides = {}) => planNotifications(input(overrides)).notifications[0];
 
-test('planning defaults to preview and enables delivery only for boolean true', () => {
-  for (const value of [undefined, false, 'true', 1, null]) {
+test('planning defaults to preview even when mailEnabled is true', () => {
+  for (const value of [undefined, false, true, 'true', 1, null]) {
     const result = planNotifications(input({ mailEnabled: value }));
     assert.equal(result.deliveryEnabled, false);
     assert.equal(result.notifications[0].deliveryEnabled, false);
     assert.equal(result.checkedProducts, 1);
     assert.equal(result.mode, 'low-stock');
+    assert.equal(result.deliveryMode, 'preview');
   }
-  const result = planNotifications(input({ mailEnabled: true }));
-  assert.equal(result.deliveryEnabled, true);
-  assert.equal(result.notifications[0].deliveryEnabled, true);
+});
+
+test('delivery requires an explicit mode and boolean true', () => {
+  for (const deliveryMode of ['preview', 'owner', 'redirect']) {
+    for (const mailEnabled of [undefined, false, true, 'true', 1, null]) {
+      const result = planNotifications(input({ deliveryMode, redirectTo: REDIRECT_TO, mailEnabled }));
+      const expected = deliveryMode !== 'preview' && mailEnabled === true;
+      assert.equal(result.deliveryEnabled, expected);
+      assert.equal(result.notifications[0].deliveryEnabled, expected);
+      assert.equal(result.notifications[0].deliveryMode, deliveryMode);
+    }
+  }
+});
+
+test('redirect mode sends only to the configured mailbox and labels the intended owner prominently', () => {
+  const mail = notification({
+    deliveryMode: 'redirect', redirectTo: `  ${REDIRECT_TO}  `, mailEnabled: true,
+    suppliers: [supplier({ companyName: 'Example Company', user: { name: 'Maya Northstar', email: 'maya@stockflow.example.test' } })],
+  });
+  assert.equal(mail.to, REDIRECT_TO);
+  assert.equal(mail.cc, undefined);
+  assert.equal(mail.bcc, undefined);
+  assert.equal(mail.deliveryEnabled, true);
+  assert.deepEqual(mail.intendedRecipient, { supplierId: 1, name: 'Maya Northstar', email: 'maya@stockflow.example.test' });
+  assert.match(mail.subject, /^\[REDIRECTED\] StockFlow:/);
+  assert.match(mail.message, /^REDIRECTED STOCKFLOW EMAIL/);
+  assert.match(mail.message, /Intended stock owner: Maya Northstar\nIntended owner email: maya@stockflow.example.test\nSupplier ID: 1\nActual testing destination: junuhammad2@gmail.com/);
+  assert.match(mail.message, /intended owner was not emailed/);
+});
+
+test('all owner messages are redirected independently without adding owner or supplied CC/BCC recipients', () => {
+  const result = planNotifications(input({
+    deliveryMode: 'redirect', redirectTo: REDIRECT_TO, mailEnabled: true,
+    suppliers: [
+      supplier({ cc: 'hidden@inventory-supplier-one.com', bcc: 'hidden@inventory-supplier-two.com' }),
+      supplier({ id: 2, companyName: 'Other owner', user: { email: 'other@stockflow.example.test' } }),
+    ],
+    products: [product({ sku: 'FIRST-ONLY' }), product({ id: 21, supplierId: 2, sku: 'SECOND-ONLY' })],
+  }));
+  assert.equal(result.notifications.length, 2);
+  assert.deepEqual(result.notifications.map(({ to }) => to), [REDIRECT_TO, REDIRECT_TO]);
+  for (const mail of result.notifications) {
+    assert.equal(mail.cc, undefined);
+    assert.equal(mail.bcc, undefined);
+    assert.equal(mail.deliveryEnabled, true);
+  }
+  assert.doesNotMatch(result.notifications[0].message, /SECOND-ONLY/);
+  assert.doesNotMatch(result.notifications[1].message, /FIRST-ONLY/);
+});
+
+test('invalid redirect settings fail closed before planning even when delivery is disabled', () => {
+  for (const redirectTo of [
+    undefined, null, '', [], { email: REDIRECT_TO }, 'owner@host', 'owner@example.com',
+    'owner@localhost', 'owner@stockflow.local', 'owner@stockflow.example.test',
+    'Owner <junuhammad2@gmail.com>', 'junuhammad2@gmail.com,owner@inventory-supplier-one.com',
+    'junuhammad2@gmail.com;owner@inventory-supplier-one.com',
+    'junuhammad2@gmail.com\r\nBcc: owner@inventory-supplier-one.com',
+  ]) {
+    for (const mailEnabled of [false, true]) {
+      assert.throws(() => planNotifications(input({ deliveryMode: 'redirect', redirectTo, mailEnabled })), /valid, deliverable redirectTo/);
+    }
+  }
+  for (const deliveryMode of [null, '', 'REDIRECT', 'send', false, 1]) {
+    assert.throws(() => planNotifications(input({ deliveryMode, redirectTo: REDIRECT_TO, mailEnabled: true })), /Unknown delivery mode/);
+  }
+});
+
+test('shared owner notification formatter enforces routing for additional workflows', () => {
+  const mail = createOwnerNotification({
+    supplier: supplier({ user: { name: 'Owner\r\nInjected name', email: 'owner@stockflow.example.test' } }),
+    mode: 'inventory-audit', subject: 'StockFlow: audit\r\nBcc: sneaky', lines: ['Check these records.'],
+    events: [{ key: 'audit:1', at: NOW }], deliveryMode: 'redirect', redirectTo: REDIRECT_TO, mailEnabled: true,
+  });
+  assert.equal(mail.to, REDIRECT_TO);
+  assert.match(mail.subject, /^\[REDIRECTED\] StockFlow: audit Bcc: sneaky$/);
+  assert.doesNotMatch(mail.message, /\r|\nInjected name/);
+  assert.match(mail.message, /Check these records/);
+  assert.deepEqual(mail.events, [{ key: 'audit:1', at: NOW }]);
+  assert.equal(createOwnerNotification({ supplier: supplier({ user: { email: 'owner@stockflow.example.test' } }), mode: 'audit', subject: 'Audit', mailEnabled: true }), null);
+  assert.throws(() => createOwnerNotification({ supplier: supplier(), mode: 'audit', subject: 'Audit', deliveryMode: 'redirect', mailEnabled: true }), /redirectTo/);
+  assert.deepEqual(resolveDeliverySettings(), { deliveryMode: 'preview', redirectTo: undefined, mailEnabled: false, deliveryEnabled: false });
 });
 
 test('critical alerts use each product threshold rather than a fixed stock count', () => {
@@ -92,7 +172,7 @@ test('malformed stock never turns into a false out-of-stock email', () => {
   }
 });
 
-test('reserved demonstration and local addresses are never recipients', () => {
+test('reserved demonstration and local addresses are rejected outside redirected delivery', () => {
   const addresses = [
     'owner@example.com', 'owner@sub.example.com', 'owner@example.org', 'owner@example.net',
     'owner@EXAMPLE.COM', 'owner@localhost', 'owner@service.localhost', 'owner@stockflow.local',
@@ -100,9 +180,18 @@ test('reserved demonstration and local addresses are never recipients', () => {
     'maya.northstar@stockflow.example.test',
   ];
   for (const email of addresses) {
-    const result = planNotifications(input({ suppliers: [supplier({ user: { email } })] }));
-    assert.equal(result.notifications.length, 0, email);
-    assert.equal(result.skipped.length, 1, email);
+    for (const deliveryMode of ['preview', 'owner']) {
+      const result = planNotifications(input({ deliveryMode, mailEnabled: true, suppliers: [supplier({ user: { email } })] }));
+      assert.equal(result.notifications.length, 0, email);
+      assert.equal(result.skipped.length, 1, email);
+    }
+    const redirected = notification({ deliveryMode: 'redirect', redirectTo: REDIRECT_TO, suppliers: [supplier({ user: { email } })] });
+    if (email.includes('@localhost')) {
+      assert.equal(redirected, undefined, 'single-label hosts remain syntactically invalid');
+    } else {
+      assert.equal(redirected.to, REDIRECT_TO, email);
+      assert.equal(redirected.intendedRecipient.email, email, email);
+    }
   }
 });
 
@@ -113,9 +202,11 @@ test('invalid, injected, and multiple recipient strings fail closed', () => {
     'owner,other@inventory-supplier-one.com', 'owner;other@inventory-supplier-one.com',
     'owner@inventory-supplier-one.com\r\nBcc: hidden@inventory-supplier-two.com',
   ]) {
-    const result = planNotifications(input({ suppliers: [supplier({ user: { email } })] }));
-    assert.equal(result.notifications.length, 0, String(email));
-    assert.equal(result.skipped.length, 1, String(email));
+    for (const deliveryMode of ['preview', 'owner', 'redirect']) {
+      const result = planNotifications(input({ deliveryMode, redirectTo: REDIRECT_TO, mailEnabled: true, suppliers: [supplier({ user: { email } })] }));
+      assert.equal(result.notifications.length, 0, String(email));
+      assert.equal(result.skipped.length, 1, String(email));
+    }
   }
 });
 
