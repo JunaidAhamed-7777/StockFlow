@@ -1,8 +1,8 @@
-export function Table({ columns, rows, rowKey = "id", empty, onRowClick, caption = "Records" }) {
+export function Table({ columns, rows, rowKey = "id", empty, onRowClick, caption = "Records", minWidth }) {
   const safeRows = Array.isArray(rows) ? rows : [];
   return (
     <div className="max-w-full overflow-x-auto" role="region" aria-label={caption} tabIndex={0}>
-      <table className="w-full min-w-[720px] text-left">
+      <table className="w-full text-left" style={{ minWidth: minWidth ?? (columns.length >= 6 ? 760 : columns.length === 5 ? 640 : 360) }}>
         <caption className="sr-only">{caption}</caption>
         <thead className="bg-surface-container-low">
           <tr>
