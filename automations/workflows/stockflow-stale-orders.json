@@ -1,0 +1,398 @@
+{
+  "id": "StockFlowOrders01",
+  "name": "StockFlow · Open order follow-up",
+  "active": false,
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 10 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-check",
+      "name": "Manual check",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "settings",
+      "name": "Settings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return [{json: {apiBaseUrl: 'http://host.docker.internal:3001/api', mode: 'stale-orders', mailEnabled: false, criticalRatio: 0.5, reminderHours: 24}}];"
+      }
+    },
+    {
+      "id": "stockflow-login",
+      "name": "StockFlow login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.apiBaseUrl + '/auth/login' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "StockFlowApiLogin01",
+          "name": "StockFlow API login (local demo)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "read-inventory",
+      "name": "Read inventory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        100
+      ],
+      "parameters": {
+        "url": "={{ $('Settings').first().json.apiBaseUrl + '/products' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('StockFlow login').first().json.data.token }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "read-owners",
+      "name": "Read owners",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        100
+      ],
+      "parameters": {
+        "url": "={{ $('Settings').first().json.apiBaseUrl + '/discovery/suppliers' }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "read-orders",
+      "name": "Read orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        100
+      ],
+      "parameters": {
+        "url": "={{ $('Settings').first().json.apiBaseUrl + '/orders' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('StockFlow login').first().json.data.token }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "plan-notifications",
+      "name": "Plan notifications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        100
+      ],
+      "parameters": {
+        "jsCode": "function planNotifications(input) {\n  const { products, suppliers, orders = [], mode = 'low-stock', state = {}, now = Date.now(), criticalRatio = 0.5, reminderHours = 24, mailEnabled = false } = input;\n  if (!Array.isArray(products) || !Array.isArray(suppliers) || !Array.isArray(orders)) throw new Error('Invalid inventory response; refusing to generate notifications.');\n  if (!['low-stock', 'daily-digest', 'stale-orders'].includes(mode)) throw new Error('Unknown notification mode.');\n  const sent = state.sent || {};\n  const ratio = Math.min(1, Math.max(0, Number(criticalRatio) || 0.5));\n  const cooldown = Math.max(1, Number(reminderHours) || 24) * 3600000;\n  const day = new Date(now).toISOString().slice(0, 10);\n  const validEmail = (email) => typeof email === 'string' && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(email) && !/@(?:.*\\.)?(?:example\\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) && !/\\.(?:test|local|invalid|example)$/i.test(email);\n  const safe = (value) => String(value ?? '').replace(/[\\r\\n\\t]+/g, ' ').slice(0, 180);\n  const stock = products.map((product) => {\n    const quantity = product.quantity;\n    const threshold = product.lowStockThreshold;\n    if (!Number.isSafeInteger(product.id) || product.id <= 0 || !Number.isSafeInteger(product.supplierId) || product.supplierId <= 0 || !Number.isSafeInteger(quantity) || quantity < 0 || !Number.isSafeInteger(threshold) || threshold < 0) throw new Error('Invalid stock values; refusing to send inaccurate alerts.');\n    return { ...product, quantity, lowStockThreshold: threshold };\n  });\n  const notifications = [];\n  const skipped = [];\n  for (const supplier of suppliers) {\n    const own = stock.filter((product) => Number(product.supplierId) === Number(supplier.id));\n    if (!own.length) continue;\n    const email = supplier.user?.email?.trim();\n    if (!validEmail(email)) { skipped.push({ supplierId: supplier.id, reason: 'Missing or non-deliverable owner email' }); continue; }\n    let lines = [];\n    let events = [];\n    let subject = '';\n    if (mode === 'low-stock') {\n      for (const product of own) {\n        const isCritical = product.quantity === 0 || product.quantity <= Math.floor(product.lowStockThreshold * ratio);\n        if (!isCritical) continue;\n        const level = product.quantity === 0 ? 'out' : 'critical';\n        const key = `stock:${supplier.id}:${product.id}`;\n        const previous = sent[key];\n        const escalated = level === 'out' && previous?.level !== 'out';\n        if (previous && !escalated && now - previous.at < cooldown) continue;\n        lines.push(`${safe(product.sku)} — ${safe(product.name)}: ${product.quantity} remaining (reorder threshold ${product.lowStockThreshold}).`);\n        events.push({ key, level, at: now });\n      }\n      subject = `StockFlow: ${lines.length} critical stock ${lines.length === 1 ? 'item' : 'items'} needs attention`;\n    } else if (mode === 'daily-digest') {\n      const key = `digest:${supplier.id}`;\n      if (sent[key]?.day === day) continue;\n      const low = own.filter((product) => product.quantity <= product.lowStockThreshold);\n      lines = [`${own.length} products; ${own.reduce((total, product) => total + product.quantity, 0)} units in stock.`, `${low.length} products at or below their reorder threshold.`];\n      lines.push(...low.slice(0, 100).map((product) => `${safe(product.sku)} — ${safe(product.name)}: ${product.quantity} remaining; threshold ${product.lowStockThreshold}.`));\n      subject = `StockFlow: inventory digest for ${day}`;\n      events = [{ key, day, at: now }];\n    } else {\n      for (const order of orders) {\n        if (!['PENDING', 'PROCESSING'].includes(order.status)) continue;\n        const created = Date.parse(order.createdAt);\n        if (!Number.isFinite(created) || now - created < 48 * 3600000) continue;\n        const ownItems = (order.orderItems || order.items || []).filter((item) => own.some((product) => Number(product.id) === Number(item.productId ?? item.product?.id)));\n        if (!ownItems.length) continue;\n        const key = `order:${supplier.id}:${order.id}`;\n        if (sent[key] && now - sent[key].at < cooldown) continue;\n        lines.push(`Order #${safe(order.id)} — ${safe(order.status)}, open since ${new Date(created).toISOString().slice(0, 10)}. Your items: ${ownItems.map((item) => `${safe(item.product?.sku || item.productId)} × ${safe(item.quantity)}`).join(', ')}.`);\n        events.push({ key, at: now });\n      }\n      subject = `StockFlow: ${lines.length} open ${lines.length === 1 ? 'order needs' : 'orders need'} follow-up`;\n    }\n    if (!events.length) continue;\n    const owner = safe(supplier.companyName || supplier.user?.name || 'Stock owner');\n    notifications.push({ kind: 'notification', mode, to: email, supplierId: supplier.id, subject, message: [`Hello ${owner},`, '', ...lines, '', 'Please review the current records in your StockFlow workspace before taking action.', 'This message uses recorded inventory and order data. It contains no AI predictions.', '', 'StockFlow Operations'].join('\\n'), events, deliveryEnabled: mailEnabled === true });\n  }\n  return { notifications, skipped, checkedProducts: stock.length, mode, deliveryEnabled: mailEnabled === true };\n}\nfunction clearRecoveredStock(state, products, criticalRatio = 0.5) {\n  const ratio = Math.min(1, Math.max(0, Number(criticalRatio) || 0.5));\n  for (const product of products) {\n    if (Number.isSafeInteger(product.quantity) && Number.isSafeInteger(product.lowStockThreshold) && product.quantity > Math.floor(product.lowStockThreshold * ratio)) {\n      delete state.sent?.[`stock:${product.supplierId}:${product.id}`];\n    }\n  }\n  return state;\n}\nconst settings = $('Settings').first().json;\nconst unwrap = (value) => Array.isArray(value) ? value : value?.data;\nconst products = unwrap($('Read inventory').first().json);\nconst suppliers = unwrap($('Read owners').first().json);\nconst orders = unwrap($('Read orders').first().json);\nconst state = $getWorkflowStaticData('global');\n// Validate all source data before changing remembered state.\nplanNotifications({...settings, products, suppliers, orders, state});\nclearRecoveredStock(state, products, settings.criticalRatio);\nconst report = planNotifications({...settings, products, suppliers, orders, state});\nif (!report.notifications.length) return [{json: {kind: 'summary', ...report, note: 'No eligible recipients or no notifications due. Reserved demo addresses never receive email.'}}];\nreturn report.notifications.map((json) => ({json}));"
+      }
+    },
+    {
+      "id": "delivery-enabled",
+      "name": "Delivery enabled",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1580,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "delivery-guard",
+              "leftValue": "={{ $json.kind === 'notification' && $json.deliveryEnabled === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send-owner-gmail",
+      "name": "Send owner Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1820,
+        0
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "remember-successful-delivery",
+      "name": "Remember successful delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function recordSuccessfulDelivery(state, notification) {\n  if (!notification?.events?.length) throw new Error('Cannot record an empty notification.');\n  state.sent ||= {};\n  for (const event of notification.events) state.sent[event.key] = { ...event };\n  return state;\n}\nconst notification = $('Delivery enabled').item.json;\nconst state = $getWorkflowStaticData('global');\nrecordSuccessfulDelivery(state, notification);\nreturn {json: {delivered: true, supplierId: notification.supplierId, eventCount: notification.events.length}};"
+      }
+    },
+    {
+      "id": "preview-only",
+      "name": "Preview only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        240
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({json: {mode: item.json.mode, deliveryEnabled: false, supplierId: item.json.supplierId || null, checkedProducts: item.json.checkedProducts, skipped: item.json.skipped || [], eventCount: item.json.events?.length || 0, note: 'Preview mode. Connect Gmail OAuth and enable mailEnabled in Settings to deliver. No email sent.'}}));"
+      }
+    },
+    {
+      "id": "setup-and-behavior",
+      "name": "Setup and behavior",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -420
+      ],
+      "parameters": {
+        "content": "## StockFlow · Open order follow-up\n\nLocal, rule-based and $0 in OpenAI usage.\n\n**Preview mode is enabled. No email is sent.**\n\n1. Connect a Gmail OAuth2 credential on Send owner Gmail.\n2. Check real supplier email addresses and review a manual preview.\n3. Change mailEnabled to true in Settings and publish.\n\nLow stock = zero units or at most 50% of the product's own reorder threshold. Messages are grouped per owner; successful deliveries have a 24-hour cooldown. Out-of-stock escalation sends immediately. Daily digest runs at 09:00 and open-order follow-up at 10:00 Asia/Kolkata. Reserved demo emails are skipped.\n\nAPI login is stored only in an encrypted n8n credential. No OpenAI key is needed. Source: automations/README.md.",
+        "height": 350,
+        "width": 780
+      }
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual check": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "StockFlow login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "StockFlow login": {
+      "main": [
+        [
+          {
+            "node": "Read inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read inventory": {
+      "main": [
+        [
+          {
+            "node": "Read owners",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read owners": {
+      "main": [
+        [
+          {
+            "node": "Read orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read orders": {
+      "main": [
+        [
+          {
+            "node": "Plan notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan notifications": {
+      "main": [
+        [
+          {
+            "node": "Delivery enabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery enabled": {
+      "main": [
+        [
+          {
+            "node": "Send owner Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preview only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send owner Gmail": {
+      "main": [
+        [
+          {
+            "node": "Remember successful delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "staticData": null,
+  "pinData": {}
+}
