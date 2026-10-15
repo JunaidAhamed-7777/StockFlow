@@ -40,6 +40,7 @@ export function CustomerProducts() {
   const requestId = useRef(0);
   const requestController = useRef(null);
   const resultsRef = useRef(null);
+  const focusResults = useRef(false);
   const pagination = useRemotePagination(productPage, { filters, pageSize: PAGE_SIZE, loadedRequestKey, ready: !loading && !error });
   const { page, rows: visibleProducts, total, requestedPage, requestKey } = pagination;
   const busy = loading || (!error && !pagination.ready);
@@ -80,6 +81,12 @@ export function CustomerProducts() {
     return () => { requestId.current += 1; requestController.current?.abort(); };
   }, [requestKey]);
 
+  useEffect(() => {
+    if (!pagination.ready || !focusResults.current) return;
+    focusResults.current = false;
+    requestAnimationFrame(() => resultsRef.current?.focus());
+  }, [pagination.ready]);
+
   function clearFilters() {
     setSearch("");
     setCategory("");
@@ -94,8 +101,8 @@ export function CustomerProducts() {
   }
 
   function changePage(nextPage) {
+    focusResults.current = true;
     pagination.setPage(nextPage);
-    requestAnimationFrame(() => resultsRef.current?.focus());
   }
 
   return (
