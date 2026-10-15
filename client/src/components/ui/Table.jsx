@@ -1,13 +1,15 @@
-export function Table({ columns, rows, rowKey = "id", empty, onRowClick }) {
+export function Table({ columns, rows, rowKey = "id", empty, onRowClick, caption = "Records" }) {
   const safeRows = Array.isArray(rows) ? rows : [];
   return (
-    <div className="overflow-x-auto">
+    <div className="max-w-full overflow-x-auto" role="region" aria-label={caption} tabIndex={0}>
       <table className="w-full min-w-[720px] text-left">
+        <caption className="sr-only">{caption}</caption>
         <thead className="bg-surface-container-low">
           <tr>
             {columns.map((column) => (
               <th
                 key={column.key}
+                scope="col"
                 className={`h-table-row-dense px-space-base font-label-sm text-label-sm uppercase tracking-wider text-outline font-semibold border-b border-outline-variant ${column.align === "right" ? "text-right" : ""}`}
               >
                 {column.header}
@@ -26,7 +28,16 @@ export function Table({ columns, rows, rowKey = "id", empty, onRowClick }) {
             safeRows.map((row, index) => (
               <tr
                 key={row?.[rowKey] ?? `row-${index}`}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={onRowClick ? (event) => {
+                  if (!event.target.closest("a,button,input,select,textarea")) onRowClick(row);
+                } : undefined}
+                onKeyDown={onRowClick ? (event) => {
+                  if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) {
+                    event.preventDefault();
+                    onRowClick(row);
+                  }
+                } : undefined}
                 className={`h-table-row-default border-b border-outline-variant last:border-0 hover:bg-surface ${onRowClick ? "cursor-pointer" : ""}`}
               >
                 {columns.map((column) => (

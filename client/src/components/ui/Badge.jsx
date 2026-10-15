@@ -16,8 +16,11 @@ export function Badge({ children, tone = "neutral", className = "" }) {
 
 export function StatusBadge({ status }) {
   const value = String(status || "").toUpperCase();
-  if (["IN", "IN_STOCK", "DELIVERED", "FULFILLED", "IN STOCK"].includes(value)) {
+  if (["IN", "IN_STOCK", "IN STOCK"].includes(value)) {
     return <Badge tone="success"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />In Stock</Badge>;
+  }
+  if (["DELIVERED", "FULFILLED"].includes(value)) {
+    return <Badge tone="success"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />{value === "DELIVERED" ? "Delivered" : "Fulfilled"}</Badge>;
   }
   if (["LOW", "LOW_STOCK", "PENDING", "PROCESSING"].includes(value)) {
     const label = value === "PENDING" ? "Pending" : value === "PROCESSING" ? "Processing" : "Low Stock";
