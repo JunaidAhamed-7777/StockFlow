@@ -39,7 +39,8 @@ it is missing, rather than omitting the filter and broadening the workspace.
 
 Filters: existing `search`, `category`, and `supplier`, plus explicit `stock`
 values `low`, `critical`, `out`, or `in`. Low uses each product's own recorded
-threshold, critical uses zero or `floor(threshold * 0.5)`, and out means zero.
+threshold, critical uses zero or `floor(threshold * 0.5)`, out means zero, and
+in means quantity above its own threshold, matching the current In Stock badge.
 The old unpaged `lowStock`/`lowStockThreshold` behavior remains compatible.
 Paged calls reject mixing these legacy stock parameters with `stock`.
 
