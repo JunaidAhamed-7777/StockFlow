@@ -23,7 +23,8 @@ export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'cl
   let failProducts = false;
   const server = http.createServer(async (req, res) => {
     const send = (status, body, type = 'application/json') => {
-      res.writeHead(status, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' });
+      res.writeHead(status, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+        'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" });
       res.end(req.method === 'HEAD' ? undefined : typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
     };
     try {
@@ -37,7 +38,7 @@ export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'cl
       }
       if (url.pathname.startsWith('/api/')) {
         // AI/model/automation routes are deliberately absent from this bridge.
-        if (!/^\/api\/(?:auth\/(?:login|me)|users\/me|products(?:\/\d+)?|orders(?:\/\d+(?:\/status)?)?|discovery\/(?:categories|suppliers(?:\/\d+)?)|dashboard|stock\/(?:low-stock|transactions|add|remove))$/.test(url.pathname)) return send(404, { message: 'No isolated browser route.' });
+        if (!/^\/api\/(?:health|auth\/(?:login|me)|users\/me|products(?:\/\d+)?|orders(?:\/\d+(?:\/status)?)?|discovery\/(?:categories|suppliers(?:\/\d+)?)|dashboard|stock\/(?:low-stock|transactions|adjust))$/.test(url.pathname)) return send(404, { message: 'No isolated browser route.' });
         if (failProducts && url.pathname === '/api/products') { report.failuresInjected++; return send(503, { message: 'Injected isolated QA product outage.' }); }
         let bytes = 0;
         const chunks = [];
@@ -57,7 +58,8 @@ export async function createBrowserBridge({ base, distRoot = path.join(ROOT, 'cl
       try { if (!(await stat(target)).isFile()) target = path.join(root, 'index.html'); }
       catch { if (path.extname(target)) return send(404, { message: 'Asset not found.' }); target = path.join(root, 'index.html'); }
       if (!(await realpath(target)).startsWith(`${root}${path.sep}`)) return send(403, { message: 'Asset outside build.' });
-      return send(200, await readFile(target), types[path.extname(target)] || 'application/octet-stream');
+      const body = await readFile(target);
+      return send(200, path.extname(target) === '.html' ? body.toString().replace(/<link\b[^>]*href=["']https?:\/\/[^>]*>/gi, '') : body, types[path.extname(target)] || 'application/octet-stream');
     } catch { return send(502, { message: 'The isolated QA service is unavailable.' }); }
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });

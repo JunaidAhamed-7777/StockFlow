@@ -18,19 +18,25 @@ test('browser bridge keeps proxy queries, isolates failures and refuses unrelate
   const upstream = http.createServer((req, res) => { seen.push(req.url); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ fixture: true, path: req.url })); });
   let bridge;
   try {
-    await writeFile(path.join(directory, 'index.html'), '<h1>Isolated test build</h1>');
+    await writeFile(path.join(directory, 'index.html'), '<link href="https://fonts.example.invalid/font.css"><h1>Isolated test build</h1>');
     await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
     bridge = await createBrowserBridge({ base: `http://127.0.0.1:${upstream.address().port}/api`, distRoot: directory });
     const page = await fetch(`${bridge.url}/customer/products`);
-    assert.match(await page.text(), /Isolated test build/);
+    const html = await page.text();
+    assert.match(html, /Isolated test build/);
+    assert.doesNotMatch(html, /fonts.example/);
+    assert.match(page.headers.get('content-security-policy'), /connect-src 'self'/);
     const proxied = await fetch(`${bridge.url}/api/products?page=2&pageSize=12&search=last%20SKU`);
     assert.equal((await proxied.json()).path, '/api/products?page=2&pageSize=12&search=last%20SKU');
     assert.equal((await fetch(`${bridge.url}/api/ai/run`)).status, 404);
     assert.equal((await fetch(`${bridge.url}/api/products`, { headers: { origin: 'http://unrelated.invalid' } })).status, 403);
     assert.equal(seen.length, 1);
+    assert.equal((await fetch(`${bridge.url}/api/health`)).status, 200);
+    assert.equal((await fetch(`${bridge.url}/api/stock/adjust`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 200);
+    assert.equal(seen.length, 3);
     await fetch(`${bridge.url}/__qa/product-availability?fail=true`, { method: 'POST' });
     assert.equal((await fetch(`${bridge.url}/api/products?page=1`)).status, 503);
-    assert.equal(seen.length, 1);
+    assert.equal(seen.length, 3);
     await fetch(`${bridge.url}/__qa/product-availability?fail=false`, { method: 'POST' });
     assert.equal((await fetch(`${bridge.url}/api/products?page=1`)).status, 200);
     assert.equal(bridge.report.failuresInjected, 1);
