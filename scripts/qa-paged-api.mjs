@@ -31,7 +31,7 @@ export function isolatedEnvironment(inherited = process.env) {
 export function verifyLocalDockerEndpoint(endpoint) {
   if (!['npipe:////./pipe/docker_engine', 'npipe:////./pipe/dockerDesktopLinuxEngine',
     'unix:///var/run/docker.sock'].includes(endpoint)) {
-    throw new Error('The default Docker context must address a recognized local Docker engine.');
+    throw new Error('The selected Docker context must address a recognized local Docker engine.');
   }
 }
 
@@ -415,7 +415,7 @@ async function verifyLegacy(base, tokens, count) {
   return { productsBytes: products.bytes, ordersBytes: orders.bytes, products: count, orders: count };
 }
 
-export async function runIsolated({ evidencePath } = {}) {
+export async function runIsolated({ evidencePath, onReady } = {}) {
   const plan = createPlan();
   const directory = await mkdtemp(path.join(tmpdir(), 'stockflow-paged-qa-'));
   const env = isolatedEnvironment();
@@ -431,8 +431,13 @@ export async function runIsolated({ evidencePath } = {}) {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const execute = (executable, args, options = {}) => command(executable, args, { ...options, signal: cancellation.signal });
   try {
-    const endpoint = JSON.parse(await execute('docker', ['context', 'inspect', 'default', '--format', '{{json .Endpoints.docker.Host}}'], { env }));
+    const context = await execute('docker', ['context', 'show'], { env });
+    if (!/^[A-Za-z0-9_.-]{1,128}$/.test(context)) throw new Error('Invalid selected Docker context.');
+    const endpoint = JSON.parse(await execute('docker', ['context', 'inspect', context, '--format', '{{json .Endpoints.docker.Host}}'], { env }));
     verifyLocalDockerEndpoint(endpoint);
+    // Pin every subsequent Docker call to the inspected local endpoint, even if
+    // another process changes the user's selected context during this run.
+    env.DOCKER_HOST = endpoint;
     creationStarted = true;
     await execute('docker', ['run', '--detach', '--pull=never', '--name', plan.name,
       '--cidfile', cidFile, '--label', `${plan.label}=${plan.token}`,
@@ -502,6 +507,8 @@ export async function runIsolated({ evidencePath } = {}) {
       assert.ok(report.stages.every((stage) => stage[kind].responseBytes < 30_000), `${kind} page exceeded compact response budget`);
       assert.ok(report.stages[2][kind].responseBytes < report.stages[0][kind].responseBytes * 1.5, `${kind} page grew with total history`);
     }
+    if (onReady) await onReady({ base: api.base.url, signal: cancellation.signal,
+      accounts: users.map(({ email, role }) => ({ email, role, password: loginPassword })), report });
   } catch (error) { failure = error; }
   finally {
     if (api?.child && api.child.exitCode === null && api.child.signalCode === null) {
