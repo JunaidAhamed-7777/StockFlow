@@ -4,6 +4,7 @@ const { readError, positiveId, parsePageQuery, pageInfo, literalLike } = require
 const productSorts = { id: Prisma.sql`p.id`, name: Prisma.sql`p.name`, sku: Prisma.sql`p.sku`, price: Prisma.sql`p.price`, quantity: Prisma.sql`p.quantity` };
 const orderSorts = { id: Prisma.sql`o.id`, createdAt: Prisma.sql`o."createdAt"`, status: Prisma.sql`o.status` };
 const customerSorts = { id: Prisma.sql`g.id`, name: Prisma.sql`g.name`, orderCount: Prisma.sql`g."orderCount"`, totalSpending: Prisma.sql`g."totalSpending"`, lastOrderAt: Prisma.sql`g."lastOrderAt"` };
+const supplierSorts = { id: Prisma.sql`s.id`, companyName: Prisma.sql`s."companyName"` };
 const statuses = ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const direction = (order) => order === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
 const whereSQL = (parts) => parts.length ? Prisma.join(parts, ' AND ') : Prisma.sql`TRUE`;
@@ -183,7 +184,31 @@ function createPagedReads(prisma) {
     });
   }
 
-  return { getProductPage, getOrderPage, getOrderDetail };
+  async function getSupplierPage(query) {
+    const options = parsePageQuery(query, { allowed: ['page', 'pageSize', 'search', 'sortBy', 'sortOrder', 'includeProductCounts'], sorts: Object.keys(supplierSorts) });
+    if (query.includeProductCounts !== undefined && query.includeProductCounts !== 'true') throw readError('Invalid supplier aggregate option');
+    const pattern = literalLike(options.search);
+    const where = options.search ? Prisma.sql`(s."companyName" ILIKE ${pattern} OR c.name ILIKE ${pattern} OR c.email ILIKE ${pattern})` : Prisma.sql`TRUE`;
+    return snapshot(prisma, async (tx) => {
+      const [summary] = await tx.$queryRaw(Prisma.sql`SELECT COUNT(*)::int AS "supplierCount" FROM "Supplier" s JOIN "User" c ON c.id = s."userId" WHERE ${where}`);
+      const pagination = pageInfo(options, summary.supplierCount);
+      const rows = await tx.$queryRaw(Prisma.sql`
+        SELECT s.id, s."userId", LEFT(s."companyName", 256) AS "companyName", LEFT(s."contactNumber", 64) AS "contactNumber", COALESCE(LEFT(s.address, 512), '') AS address,
+          ${customerSQL} AS "user", ARRAY_REMOVE(ARRAY[CASE WHEN CHAR_LENGTH(s."companyName") > 256 THEN 'companyName' END,
+            CASE WHEN CHAR_LENGTH(s."contactNumber") > 64 THEN 'contactNumber' END, CASE WHEN CHAR_LENGTH(s.address) > 512 THEN 'address' END], NULL) AS "truncatedFields"
+        FROM "Supplier" s JOIN "User" c ON c.id = s."userId" WHERE ${where}
+        ORDER BY ${supplierSorts[options.sortBy]} ${direction(options.sortOrder)}, s.id ${direction(options.sortOrder)}
+        LIMIT ${options.pageSize} OFFSET ${(pagination.page - 1) * options.pageSize}`);
+      if (query.includeProductCounts === 'true') {
+        const counts = rows.length ? await tx.$queryRaw(Prisma.sql`SELECT p."supplierId", COUNT(*)::int AS "productCount" FROM "Product" p WHERE p."supplierId" IN (${Prisma.join(rows.map((row) => row.id))}) GROUP BY p."supplierId"`) : [];
+        const bySupplier = new Map(counts.map((row) => [row.supplierId, row.productCount]));
+        for (const row of rows) row.productCount = bySupplier.get(row.id) || 0;
+      }
+      return pageEnvelope(rows, pagination, summary);
+    });
+  }
+
+  return { getProductPage, getOrderPage, getOrderDetail, getSupplierPage };
 }
 
 module.exports = { createPagedReads };

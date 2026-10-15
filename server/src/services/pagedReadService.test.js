@@ -155,3 +155,29 @@ test('unauthorized detail stops before any line/customer projection', async () =
   await assert.rejects(createPagedReads(db).getOrderDetail(41, supplier), { status: 403 });
   assert.equal(db.queries.length, 0);
 });
+
+test('supplier directory uses full filtered count and one product-count aggregate over page IDs', async () => {
+  const rows = [{ id: 2, userId: 8, companyName: 'Display', contactNumber: '000', address: '', user: { id: 8, name: 'Supplier', email: 'supplier@example.test', truncatedFields: [] }, truncatedFields: [] }, { id: 3, userId: 9, companyName: 'Other', contactNumber: '001', address: '', user: { id: 9, name: 'Other', email: 'other@example.test', truncatedFields: [] }, truncatedFields: [] }];
+  const db = fixtureClient([[{ supplierCount: 44 }], rows, [{ supplierId: 2, productCount: 10000 }]]);
+  const result = await createPagedReads(db).getSupplierPage({ page: '2', pageSize: '2', search: ' %_ ', includeProductCounts: 'true', sortBy: 'companyName' });
+  assert.equal(result.pagination.total, 44); assert.equal(result.pagination.page, 2);
+  assert.equal(result.data[0].productCount, 10000); assert.equal(result.data[1].productCount, 0);
+  assert.deepEqual(result.summary, { supplierCount: 44 });
+  assert.deepEqual(db.transactions, [{ isolationLevel: 'RepeatableRead' }]);
+  assert.match(db.queries[0].text, /s\."companyName" ILIKE/); assert.ok(db.queries[0].values.includes('%\\%\\_%'));
+  assert.match(db.queries[1].text, /LEFT\(s.address, 512\)/); assert.match(db.queries[1].text, /ORDER BY s\."companyName" ASC, s.id ASC/);
+  assert.doesNotMatch(db.queries[1].text, /c.password|SELECT \*/);
+  assert.match(db.queries[2].text, /COUNT\(\*\)::int AS "productCount"/); assert.deepEqual(db.queries[2].values, [2, 3]);
+});
+
+test('supplier directory validates options before reads and omits unrequested aggregates', async () => {
+  const db = fixtureClient([]);
+  for (const query of [{ page: '1', includeProductCounts: '' }, { page: '1', includeProductCounts: 'false' }, { page: '1', includeProductCounts: ['true', 'true'] }, { page: '1', sortBy: 'userId' }]) await assert.rejects(createPagedReads(db).getSupplierPage(query), { status: 400 });
+  assert.equal(db.transactions.length, 0);
+  const plain = fixtureClient([[{ supplierCount: 1 }], [{ id: 1 }]]);
+  const result = await createPagedReads(plain).getSupplierPage({ page: '1' });
+  assert.equal(result.data[0].productCount, undefined); assert.equal(plain.queries.length, 2);
+  const empty = fixtureClient([[{ supplierCount: 0 }], []]);
+  assert.deepEqual((await createPagedReads(empty).getSupplierPage({ page: '99', includeProductCounts: 'true' })).data, []);
+  assert.equal(empty.queries.length, 2);
+});
