@@ -73,7 +73,7 @@ export function SupplierDashboard() {
     <>
       <PageHeader
         title="Overview"
-        description={`Stock and customer orders for ${supplier?.companyName || "your company"}.`}
+        description={`Stock and customer orders for ${supplier?.companyName || "your company"}`}
         actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")}>Create product</Button>}
       />
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-space-base">

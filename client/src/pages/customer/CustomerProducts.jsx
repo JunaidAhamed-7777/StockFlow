@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { Pagination } from "../../components/ui/Pagination";
 import { listProducts } from "../../services/product.service";
 import { getCategories, getSuppliers } from "../../services/discovery.service";
 import { useCart } from "../../context/CartContext";
@@ -21,36 +23,40 @@ const PAGE_SIZE = 12;
 export function CustomerProducts() {
   const navigate = useNavigate();
   const location = useLocation();
+  const returnTo = location.pathname + location.search;
   const { addItem, count } = useCart();
-  const [search, setSearch] = useState(new URLSearchParams(location.search).get("search") || "");
-  const [category, setCategory] = useState("");
-  const [supplier, setSupplier] = useState("");
+  const { filters, setFilters } = useListFilters({ search: "", category: "", supplier: "" });
+  const [search, setSearch] = useState(filters.search);
+  const [category, setCategory] = useState(filters.category);
+  const [supplier, setSupplier] = useState(filters.supplier);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [page, setPage] = useState(1);
+  const [loadedFilterKey, setLoadedFilterKey] = useState("");
   const requestId = useRef(0);
   const resultsRef = useRef(null);
+  const filterKey = JSON.stringify(filters);
+  const pagination = usePaginatedRows(products, { pageSize: PAGE_SIZE, ready: !loading && !error && loadedFilterKey === filterKey });
+  const { page, rows: visibleProducts } = pagination;
 
-  async function load(searchOverride, categoryOverride = category, supplierOverride = supplier) {
+  async function load() {
     const activeRequest = ++requestId.current;
-    const searchValue = (typeof searchOverride === "string" ? searchOverride : search).trim();
     setLoading(true);
     setError("");
     try {
       const params = {};
-      if (searchValue) params.search = searchValue;
-      if (categoryOverride) params.category = categoryOverride;
-      if (supplierOverride) params.supplier = supplierOverride;
+      if (filters.search) params.search = filters.search;
+      if (filters.category) params.category = filters.category;
+      if (filters.supplier) params.supplier = filters.supplier;
       const [rows, cats, sups] = await Promise.all([listProducts(params), getCategories(), getSuppliers()]);
       if (activeRequest !== requestId.current) return;
       setCategories(cats || []);
       setSuppliers(sups || []);
       setProducts(enrichProducts(rows || [], cats || [], sups || []));
-      setPage(1);
+      setLoadedFilterKey(filterKey);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -59,17 +65,18 @@ export function CustomerProducts() {
   }
 
   useEffect(() => {
-    const next = new URLSearchParams(location.search).get("search") || "";
-    setSearch(next);
-    load(next);
+    setSearch(filters.search);
+    setCategory(filters.category);
+    setSupplier(filters.supplier);
+    load();
     return () => { requestId.current += 1; };
-  }, [location.search]);
+  }, [filters.search, filters.category, filters.supplier]);
 
   function clearFilters() {
     setSearch("");
     setCategory("");
     setSupplier("");
-    load("", "", "");
+    setFilters({ search: "", category: "", supplier: "" });
   }
 
   function addToCart(product) {
@@ -78,11 +85,8 @@ export function CustomerProducts() {
     setNotice(`${product.name} added to your cart. Quantities are limited to available stock.`);
   }
 
-  const pageCount = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
-  const visibleProducts = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
   function changePage(nextPage) {
-    setPage(nextPage);
+    pagination.setPage(nextPage);
     requestAnimationFrame(() => resultsRef.current?.focus());
   }
 
@@ -94,8 +98,8 @@ export function CustomerProducts() {
         actions={<Button variant="outline" onClick={() => navigate("/customer/cart")} icon={<Icon name="shopping_cart" size={18} />}>Cart ({count})</Button>}
       />
       <Card className="p-space-base">
-        <form noValidate onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-end" aria-label="Filter product catalog">
-          <ToolbarSearch value={search} onChange={setSearch} placeholder="Search products or SKU" />
+        <form noValidate onSubmit={(event) => { event.preventDefault(); setFilters({ search, category, supplier }); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-end" aria-label="Filter product catalog">
+          <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "", category, supplier })} placeholder="Search products or SKU" label="Search products" />
           <Select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}>
             <option value="">All categories</option>
             {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -134,7 +138,7 @@ export function CustomerProducts() {
                       <span className="text-on-surface-variant">{product.quantity} available</span>
                     </div>
                     <div className="flex gap-space-sm pt-space-xs">
-                      <Button variant="outline" className="flex-1" aria-label={`View ${product.name}`} onClick={() => navigate(`/customer/products/${product.id}`)}>View details</Button>
+                      <Button variant="outline" className="flex-1" aria-label={`View ${product.name}`} onClick={() => navigate(`/customer/products/${product.id}`, { state: { returnTo } })}>View details</Button>
                       <Button className="flex-1" disabled={status === "OUT"} aria-label={`Add ${product.name} to cart`} onClick={() => addToCart(product)} icon={<Icon name="add_shopping_cart" size={16} />}>
                         {status === "OUT" ? "Unavailable" : "Add to cart"}
                       </Button>
@@ -144,11 +148,7 @@ export function CustomerProducts() {
               );
             })}
           </div>
-          {pageCount > 1 ? <nav aria-label="Catalog pagination" className="flex items-center justify-between gap-space-base">
-            <Button variant="outline" disabled={page === 1} onClick={() => changePage(page - 1)}>Previous</Button>
-            <span className="font-body-sm" aria-live="polite">Page {page} of {pageCount}</span>
-            <Button variant="outline" disabled={page === pageCount} onClick={() => changePage(page + 1)}>Next</Button>
-          </nav> : null}
+          <Pagination {...pagination} onPageChange={changePage} label="Products" />
         </>
       ))}
     </>
