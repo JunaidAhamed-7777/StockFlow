@@ -1,5 +1,6 @@
 // Isolated synthetic browser QA. Never imports the backend or reads environment secrets.
 import http from "node:http";
+import { randomUUID } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -81,6 +82,7 @@ function cleanReport(input) {
 export function createQAServer({ distRoot = defaultDist, config = {} } = {}) {
   let sizes = validateConfig(config);
   let fixtures = createFixtures(sizes);
+  let generation = randomUUID();
   let reports = [];
   let requests = {};
   let apiBytes = 0;
@@ -106,20 +108,23 @@ export function createQAServer({ distRoot = defaultDist, config = {} } = {}) {
         if (req.method !== "POST") return send(405, { message: "Use POST JSON fixture sizes." });
         sizes = validateConfig(await readJSON(req, 1024), sizes);
         fixtures = createFixtures(sizes);
+        generation = randomUUID();
         reports = []; requests = {}; apiBytes = 0;
-        return send(200, { synthetic: true, config: sizes });
+        return send(200, { synthetic: true, generation, config: sizes });
       }
       if (pathname === "/__qa/report") {
         if (req.method === "POST") {
-          reports.push({ ...cleanReport(await readJSON(req)), config: { ...sizes }, receivedAt: new Date().toISOString() });
+          const input = await readJSON(req);
+          if (input?.generation !== generation) return send(409, { message: "Fixture generation changed. Reload this QA document." });
+          reports.push({ ...cleanReport(input), generation, config: { ...sizes }, receivedAt: new Date().toISOString() });
           reports = reports.slice(-120);
           return send(200, { accepted: true });
         }
         if (req.method === "DELETE") { reports = []; requests = {}; apiBytes = 0; return send(200, { reset: true }); }
-        if (req.method === "GET") return send(200, { synthetic: true, config: sizes, apiRequests: requests, apiBytes, reports });
+        if (req.method === "GET") return send(200, { synthetic: true, generation, config: sizes, apiRequests: requests, apiBytes, reports });
         return send(405, { message: "Unsupported report method." });
       }
-      if (pathname === "/__qa/metrics.js" && req.method === "GET") return send(200, await readFile(path.join(here, "qa-metrics.js")), "text/javascript");
+      if (pathname === "/__qa/metrics.js" && req.method === "GET") return send(200, (await readFile(path.join(here, "qa-metrics.js"), "utf8")).replace("__STOCKFLOW_QA_GENERATION__", generation), "text/javascript");
       if (pathname === "/__qa" && req.method === "GET") return send(200, '<!doctype html><html><meta charset="utf-8"><title>Synthetic StockFlow QA</title><body><h1>Synthetic StockFlow QA metrics</h1><p>Isolated fixtures; browser measurements are laboratory observations, not production guarantees. LCP and CLS cover the document lifetime; route readiness and DOM counts cover the current route. Event Timing maximum is not field INP. Transfer sizes use browser Resource Timing; API byte counts use uncompressed server responses.</p><p>Sign in as customer@qa.example.test, supplier@qa.example.test or admin@qa.example.test with any password of at least 12 characters.</p><p><a href="/login">Open application</a></p><pre id="qa-report">Loading report…</pre><script src="/__qa/metrics-view.js"></script></body></html>', "text/html");
       if (pathname === "/__qa/metrics-view.js" && req.method === "GET") return send(200, 'async function update(){const data=await fetch("/__qa/report").then(r=>r.json());document.getElementById("qa-report").textContent=JSON.stringify(data,null,2)}update();setInterval(update,2000);', "text/javascript");
       if (pathname.startsWith("/api/")) {

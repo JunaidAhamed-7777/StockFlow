@@ -106,7 +106,12 @@ test("loopback synthetic server isolates writes, filters fixtures, and sanitizes
   });
 
   await t.test("report storage is redacted, bounded, resettable and tied to fixture configuration", async () => {
-    const report = { path: "/admin/products", browser: "Chromium/140", ready: true, routeReadyMs: 150, usedJSHeapBytes: null, errorCount: 0, password: "never keep", token: "never keep", message: "never keep" };
+    const { generation } = await (await request("/__qa/report")).json();
+    assert.match(generation, /^[a-f0-9-]{36}$/);
+    const metrics = await (await request("/__qa/metrics.js")).text();
+    assert.ok(metrics.includes(`const generation = "${generation}";`));
+    assert.ok(!metrics.includes("__STOCKFLOW_QA_GENERATION__"));
+    const report = { generation, path: "/admin/products", browser: "Chromium/140", ready: true, routeReadyMs: 150, usedJSHeapBytes: null, errorCount: 0, password: "never keep", token: "never keep", message: "never keep" };
     for (let index = 0; index < 122; index += 1) assert.equal((await request("/__qa/report", json(report))).status, 200);
     let result = await (await request("/__qa/report")).json();
     assert.equal(result.reports.length, 120);
@@ -118,7 +123,15 @@ test("loopback synthetic server isolates writes, filters fixtures, and sanitizes
     assert.equal((await request("/__qa/config", json({ products: 1000, orders: 1000, suppliers: 20 }))).status, 200);
     result = await (await request("/__qa/report")).json();
     assert.deepEqual(result.config, { products: 1000, orders: 1000, suppliers: 20 });
+    assert.notEqual(result.generation, generation);
     assert.deepEqual(result.reports, []);
+    assert.equal((await request("/__qa/report", json(report))).status, 409);
+    assert.deepEqual((await (await request("/__qa/report")).json()).reports, []);
+    assert.equal((await request("/__qa/report", json({ ...report, generation: result.generation }))).status, 200);
+    const current = (await (await request("/__qa/report")).json()).reports;
+    assert.equal(current.length, 1);
+    assert.equal(current[0].generation, result.generation);
+    assert.equal(current[0].config.products, 1000);
     assert.equal((await (await request("/api/products", { headers: auth })).json()).data.length, 1000);
     assert.equal((await (await request("/api/orders", { headers: auth })).json()).data.length, 1000);
     assert.equal((await (await request("/api/discovery/suppliers", { headers: auth })).json()).data.length, 20);

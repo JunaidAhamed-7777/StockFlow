@@ -1,5 +1,6 @@
 // Served only by qa-browser-server.mjs. Never records input values, tokens or error text.
 (() => {
+  const generation = "__STOCKFLOW_QA_GENERATION__";
   const supported = PerformanceObserver.supportedEntryTypes || [];
   performance.setResourceTimingBufferSize(2000);
   const state = {
@@ -89,7 +90,7 @@
     const total = (entries, property) => entries.reduce((sum, entry) => sum + (entry[property] || 0), 0);
     const page = Number(new URLSearchParams(location.search).get("page"));
     return {
-      ...state, path: location.pathname, page: Number.isSafeInteger(page) && page > 0 ? page : 1,
+      ...state, generation, path: location.pathname, page: Number.isSafeInteger(page) && page > 0 ? page : 1,
       elapsedMs: performance.now(), routeReadyMs, ready,
       resourceCount: allResources.length, transferBytes: total(allResources, "transferSize"), encodedBytes: total(allResources, "encodedBodySize"), decodedBytes: total(allResources, "decodedBodySize"),
       apiResourceCount: api.length, apiTransferBytes: total(api, "transferSize"), apiResourceTotalMs: total(api, "duration"), apiResourceMaxMs: Math.max(0, ...api.map((entry) => entry.duration)),
