@@ -55,22 +55,33 @@ export function verifyGeneratedClientSource(source, directory, clientDirectory) 
   let config;
   try { config = JSON.parse(match?.[1]); } catch { throw new Error('Generated Prisma configuration is not the expected plain JSON shape.'); }
   const envPaths = config.relativeEnvPaths;
-  if (!contained(directory, clientDirectory) || config.generator?.provider?.value !== 'prisma-client-js'
-    || path.resolve(config.generator?.output?.value || '') !== path.resolve(clientDirectory)
-    || !contained(directory, config.generator?.sourceFilePath || '')
-    || (path.resolve(clientDirectory, config.relativePath || '') !== path.resolve(directory)
-      && !contained(directory, path.resolve(clientDirectory, config.relativePath || '')))
-    || !envPaths || !Object.hasOwn(envPaths, 'rootEnvPath') || !Object.hasOwn(envPaths, 'schemaEnvPath')
-    || !Object.values(envPaths).every((value) => value === null
-      || (typeof value === 'string' && contained(directory, path.resolve(clientDirectory, value))))
-    || config.activeProvider !== 'postgresql'
-    || config.inlineDatasources?.db?.url?.fromEnvVar !== 'DATABASE_URL'
-    || config.inlineDatasources?.db?.url?.value !== null
-    || config.isBundled === true || !source.includes('config.dirname = __dirname')
-    || !source.includes("require('./runtime/library.js')")
-    || source.includes("require('@prisma/client/")) {
-    throw new Error('Generated Prisma configuration may read outside the isolated workspace.');
-  }
+  const resolveText = (value, base) => typeof value === 'string' && value.length
+    ? path.resolve(...(base ? [base, value] : [value])) : null;
+  const schemaDirectory = resolveText(config.relativePath, clientDirectory);
+  // Diagnostics contain fixed check names only. Never include generated paths,
+  // datasource values, environment values, or source excerpts in an error.
+  const checks = {
+    client_directory_contained: contained(directory, clientDirectory),
+    generator_provider: config.generator?.provider?.value === 'prisma-client-js',
+    generator_output_matches: resolveText(config.generator?.output?.value) === path.resolve(clientDirectory),
+    generator_source_contained: typeof config.generator?.sourceFilePath === 'string'
+      && contained(directory, config.generator.sourceFilePath),
+    schema_directory_contained: schemaDirectory !== null
+      && (schemaDirectory === path.resolve(directory) || contained(directory, schemaDirectory)),
+    env_paths_shape: Boolean(envPaths && typeof envPaths === 'object' && !Array.isArray(envPaths)
+      && Object.hasOwn(envPaths, 'rootEnvPath') && Object.hasOwn(envPaths, 'schemaEnvPath')),
+    env_paths_contained: Boolean(envPaths && Object.values(envPaths).every((value) => value === null
+      || (typeof value === 'string' && contained(directory, path.resolve(clientDirectory, value))))),
+    active_provider: config.activeProvider === 'postgresql',
+    datasource_variable: config.inlineDatasources?.db?.url?.fromEnvVar === 'DATABASE_URL',
+    datasource_literal_absent: config.inlineDatasources?.db?.url?.value === null,
+    unbundled_configuration: config.isBundled !== true,
+    module_directory: source.includes('config.dirname = __dirname'),
+    local_runtime_import: source.includes("require('./runtime/library.js')"),
+    checkout_runtime_absent: !source.includes("require('@prisma/client/"),
+  };
+  const failed = Object.entries(checks).filter(([, passed]) => !passed).map(([name]) => name);
+  if (failed.length) throw new Error(`Generated Prisma configuration may read outside the isolated workspace. Failed checks: ${failed.join(', ')}.`);
   return config;
 }
 

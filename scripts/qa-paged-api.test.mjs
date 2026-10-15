@@ -68,6 +68,15 @@ test('generated client guard rejects checkout env paths, external runtime import
   }
   assert.throws(() => verifyGeneratedClientSource(source(config).replace('./runtime/library.js', '@prisma/client/runtime/library.js'), directory, output));
   assert.throws(() => verifyGeneratedClientSource('throw new Error("configuration is not evaluated")', directory, output));
+  const malformed = structuredClone(config);
+  malformed.inlineDatasources.db.url.value = 'do-not-print-sensitive-literal';
+  delete malformed.relativeEnvPaths.schemaEnvPath;
+  assert.throws(() => verifyGeneratedClientSource(source(malformed), directory, output), (error) => {
+    assert.match(error.message, /Failed checks: env_paths_shape, datasource_literal_absent\./);
+    assert.ok(!error.message.includes('do-not-print-sensitive-literal'));
+    assert.ok(!error.message.includes(directory));
+    return true;
+  });
 });
 
 test('subprocess timeout waits for close before a caller can enter CID cleanup', async () => {
