@@ -82,17 +82,6 @@
     color: #0f172a;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    .animate-ping, .animate-pulse, .animate-spin {
-      /* Keep the text/status visible while removing continuous motion. */
-      animation: none;
-    }
-    .transition-all, .transition-transform {
-      transition-property: color, background-color, border-color, opacity;
-    }
-  }
-
   @media (forced-colors: active) {
     * { scrollbar-color: auto; }
     *::-webkit-scrollbar-thumb { background: CanvasText; border-color: Canvas; }
@@ -127,5 +116,14 @@
 @layer utilities {
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Unlayered rules override animation utilities without disabling useful color feedback. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-ping, .animate-pulse, .animate-spin { animation: none; }
+  .transition-all, .transition-transform {
+    transition-property: color, background-color, border-color, opacity;
   }
 }

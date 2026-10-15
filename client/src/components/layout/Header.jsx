@@ -46,9 +46,11 @@ export function Header({ onMenu, collapsed, mobileOpen }) {
 
   function onSearch(event) {
     event.preventDefault();
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(location.pathname === searchTarget ? location.search : "");
+    params.delete("page");
     if (query.trim()) params.set("search", query.trim());
-    navigate(`${searchTarget}?${params.toString()}`);
+    else params.delete("search");
+    navigate(`${searchTarget}${params.size ? `?${params}` : ""}`);
   }
 
   const headerAction =
