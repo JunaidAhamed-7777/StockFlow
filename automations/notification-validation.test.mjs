@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planNotifications } from './notification-rules.mjs';
+import { planMaintenanceNotifications } from './maintenance-rules.mjs';
 
 const now = Date.parse('2026-10-15T10:00:00Z');
 const owner = { id: 1, user: { name: 'One', email: 'one@stockflow.test' } };
@@ -59,4 +60,12 @@ test('stale order text uses catalog labels and excludes forged nested labels and
   assert.doesNotMatch(result.notifications[1].message, /CATALOG-OWN|FORGED|customer-private/);
   const alias = planNotifications(input({ mode: 'stale-orders', orders: [{ ...order, orderItems: undefined, items: [{ product: { id: 11, sku: 'FORGED' }, quantity: 2 }] }] }));
   assert.match(alias.notifications[0].message, /CATALOG-OWN × 2/);
+});
+
+test('order updates reject unresolved catalog owners before establishing any baseline', () => {
+  const state = {};
+  assert.throws(() => planMaintenanceNotifications(input({ mode: 'order-updates', state,
+    products: [{ ...product, supplierId: 2 }],
+  })), /Invalid inventory ownership/);
+  assert.deepEqual(state, {});
 });

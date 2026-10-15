@@ -55,6 +55,20 @@ test('all five workflow templates default to preview and use one encrypted Disco
   }
 });
 
+test('all five schedules retain their exact interval and Asia/Kolkata timezone', () => {
+  const schedules = {
+    'low-stock': [{ field: 'minutes', minutesInterval: 15 }],
+    'daily-digest': [{ field: 'cronExpression', expression: '0 0 9 * * *' }],
+    'stale-orders': [{ field: 'cronExpression', expression: '0 0 10 * * *' }],
+    'inventory-audit': [{ field: 'cronExpression', expression: '0 30 9 * * 1' }],
+    'order-updates': [{ field: 'minutes', minutesInterval: 15 }],
+  };
+  for (const { mode, workflow } of workflows) {
+    assert.equal(workflow.settings.timezone, 'Asia/Kolkata', mode);
+    assert.deepEqual(getNode(workflow, 'Schedule').parameters.rule.interval, schedules[mode], mode);
+  }
+});
+
 test('delivery guards reject owner routing, changed destinations, and missing recipient attribution', () => {
   const valid = { kind: 'notification', deliveryEnabled: true, deliveryMode: 'discord', to: DESTINATION, intendedRecipient: { name: 'Owner', email: 'owner@stockflow.test', supplierId: 1 } };
   for (const { workflow } of workflows) {
@@ -100,6 +114,51 @@ test('generated planners execute offline and attribute channel messages includin
       assert.ok(notification.message.includes(`Intended owner email: ${notification.intendedRecipient.email}`));
       assert.ok(notification.message.includes('Actual testing destination: configured Discord channel.'));
     }
+  }
+});
+
+test('embedded stock planners reject ambiguous identifiers before clearing remembered incidents', () => {
+  for (const { mode, workflow } of workflows.filter(({ mode }) => ['low-stock', 'daily-digest', 'stale-orders'].includes(mode))) {
+    for (const duplicate of ['product', 'supplier']) {
+      const source = fixture(workflow, mode);
+      source['Read inventory'].data[0].quantity = 6;
+      if (duplicate === 'product') {
+        source['Read inventory'].data.push({ ...source['Read inventory'].data[0], sku: 'DUPLICATE-RECORD' });
+      } else {
+        source['Read owners'].push({ id: 1, user: { name: 'Different owner', email: 'different@stockflow.test' } });
+      }
+      const state = { sent: { 'stock:1:11': { level: 'out', at: 1 }, unrelated: { at: 2 } } };
+      const before = structuredClone(state);
+      assert.throws(() => executeCode(workflow, 'Plan notifications', { source, state }), /Invalid|ambiguous/i, `${mode}: duplicate ${duplicate}`);
+      assert.deepEqual(state, before, `${mode}: duplicate ${duplicate} must preserve every delivery marker`);
+    }
+  }
+});
+
+test('embedded stale-order planner uses catalog labels and excludes forged labels and customer data', () => {
+  const { workflow } = workflows.find(({ mode }) => mode === 'stale-orders');
+  const source = fixture(workflow, 'stale-orders');
+  source['Read inventory'].data.push({ ...source['Read inventory'].data[0], id: 21, supplierId: 2, sku: 'OTHER-CATALOG-LABEL' });
+  source['Read owners'].push({ id: 2, user: { name: 'Other owner', email: 'other@stockflow.test' } });
+  Object.assign(source['Read orders'].data[0], {
+    customer: { name: 'PRIVATE-CUSTOMER', email: 'private-customer@example.test' },
+    totalAmount: 9234567.45,
+    orderItems: [
+      { productId: 11, quantity: 1, product: { id: 21, supplierId: 2, sku: 'FORGED-OTHER-OWNER-LABEL' } },
+      { productId: 21, quantity: 2, product: { id: 11, supplierId: 1, sku: 'FORGED-FIRST-OWNER-LABEL' } },
+    ],
+  });
+  const notifications = executeCode(workflow, 'Plan notifications', { source }).map(({ json }) => json);
+  assert.equal(notifications.length, 2);
+  const first = notifications.find(({ supplierId }) => supplierId === 1);
+  const second = notifications.find(({ supplierId }) => supplierId === 2);
+  assert.match(first.message, /DESK-ONE × 1/);
+  assert.doesNotMatch(first.message, /OTHER-CATALOG-LABEL/);
+  assert.match(second.message, /OTHER-CATALOG-LABEL × 2/);
+  assert.doesNotMatch(second.message, /DESK-ONE/);
+  for (const notification of notifications) {
+    assert.doesNotMatch(notification.message, /FORGED-|PRIVATE-CUSTOMER|private-customer@example\.test|9234567/);
+    assert.equal(notification.deliveryEnabled, false);
   }
 });
 
@@ -153,9 +212,7 @@ test('additional workflows read only existing order and category endpoints', () 
   const audit = workflows.find(({ mode }) => mode === 'inventory-audit').workflow;
   const updates = workflows.find(({ mode }) => mode === 'order-updates').workflow;
   assert.match(getNode(audit, 'Read categories').parameters.url, /\/discovery\/categories/);
-  assert.equal(getNode(audit, 'Schedule').parameters.rule.interval[0].expression, '0 30 9 * * 1');
   assert.match(getNode(updates, 'Read orders').parameters.url, /\/orders/);
-  assert.equal(getNode(updates, 'Schedule').parameters.rule.interval[0].minutesInterval, 15);
   for (const { workflow } of workflows) {
     for (const node of workflow.nodes.filter(({ type }) => type === 'n8n-nodes-base.httpRequest')) {
       assert.equal(node.parameters.method || 'GET', node.name === 'StockFlow login' ? 'POST' : 'GET');
