@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { usePaginatedRows } from "../../hooks/useListState";
+import { useRemotePagination } from "../../hooks/useRemotePagination";
 import { Pagination } from "../../components/ui/Pagination";
-import { listProducts } from "../../services/product.service";
-import { getLowStock } from "../../services/stock.service";
-import { getCategories, getSuppliers } from "../../services/discovery.service";
+import { listProductPage } from "../../services/product.service";
+import { getSupplier } from "../../services/discovery.service";
 import { getErrorMessage } from "../../utils/errors";
-import { enrichProducts, formatCurrency, stockStatus } from "../../utils/format";
+import { formatCurrency, stockStatus } from "../../utils/format";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Table } from "../../components/ui/Table";
@@ -18,24 +17,40 @@ import { StockAdjustModal } from "../../components/StockAdjustModal";
 import { StatCard } from "../../components/ui/StatCard";
 
 export function AdminInventory() {
-  const [products, setProducts] = useState([]);
-  const [lowStock, setLowStock] = useState([]);
+  const [products, setProducts] = useState(null);
+  const [lowStock, setLowStock] = useState(null);
+  const [loadedStockKey, setLoadedStockKey] = useState("");
+  const [loadedLowKey, setLoadedLowKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [adjusting, setAdjusting] = useState(null);
   const requestId = useRef(0);
-  const stockPage = usePaginatedRows(products, { ready: !loading && !error });
-  const lowStockPage = usePaginatedRows(lowStock, { pageKey: "lowPage", ready: !loading && !error });
+  const stockPage = useRemotePagination(products, { loadedRequestKey: loadedStockKey, ready: !loading && !error });
+  const lowStockPage = useRemotePagination(lowStock, { filters: { stock: "low" }, pageKey: "lowPage", loadedRequestKey: loadedLowKey, ready: !loading && !error });
 
   async function load() {
     const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
-      const [rows, low, cats, sups] = await Promise.all([listProducts(), getLowStock(), getCategories(), getSuppliers()]);
+      const [rows, low] = await Promise.all([
+        listProductPage({ page: stockPage.requestedPage, pageSize: 20 }),
+        listProductPage({ page: lowStockPage.requestedPage, pageSize: 20, stock: "low" }),
+      ]);
+      const supplierIds = [...new Set(rows.rows.map((product) => product.supplierId))];
+      const suppliers = new Map();
+      let nextSupplier = 0;
+      await Promise.all(Array.from({ length: Math.min(4, supplierIds.length) }, async () => {
+        while (nextSupplier < supplierIds.length) {
+          const supplierId = supplierIds[nextSupplier++];
+          suppliers.set(supplierId, await getSupplier(supplierId));
+        }
+      }));
       if (activeRequest !== requestId.current) return;
-      setProducts(enrichProducts(rows || [], cats || [], sups || []));
-      setLowStock(low || []);
+      setProducts({ ...rows, rows: rows.rows.map((product) => ({ ...product, supplier: suppliers.get(product.supplierId) })) });
+      setLowStock(low);
+      setLoadedStockKey(stockPage.requestKey);
+      setLoadedLowKey(lowStockPage.requestKey);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -46,12 +61,10 @@ export function AdminInventory() {
   useEffect(() => {
     load();
     return () => { requestId.current += 1; };
-  }, []);
+  }, [stockPage.requestKey, lowStockPage.requestKey]);
 
   if (loading) return <PageSkeleton />;
   if (error) return <ErrorState message={error} onRetry={load} />;
-
-  const totalUnits = products.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
   return (
     <>
@@ -60,9 +73,9 @@ export function AdminInventory() {
         description="Review stock availability and record adjustments with a traceable reason."
       />
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-space-base">
-        <StatCard label="Products" value={products.length} icon="inventory_2" />
-        <StatCard label="Units on hand" value={totalUnits} icon="warehouse" />
-        <StatCard label="Low-stock products" value={lowStock.length} icon="warning" tone="danger" />
+        <StatCard label="Products" value={products.summary.productCount} icon="inventory_2" />
+        <StatCard label="Units on hand" value={products.summary.totalQuantity} icon="warehouse" />
+        <StatCard label="Low-stock products" value={products.summary.lowStockCount} icon="warning" tone="danger" />
       </section>
       <Card>
         <CardHeader title="Low-stock products" />
