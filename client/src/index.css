@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 @layer base {
   html,
@@ -11,10 +10,54 @@
 
   body {
     margin: 0;
-    background: #f8f9ff;
-    color: #0b1c30;
-    font-family: Geist, sans-serif;
-    overscroll-behavior: none;
+    background: #f8fafc;
+    color: #0f172a;
+    font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  *, ::before, ::after {
+    border-color: #e2e8f0;
+  }
+
+  :focus-visible {
+    outline: 2px solid #2563eb !important;
+    outline-offset: 3px;
+  }
+
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  input, select, textarea {
+    accent-color: #2563eb;
+    scroll-margin-top: 5rem;
+  }
+
+  input::placeholder, textarea::placeholder {
+    opacity: 1;
+    color: #64748b;
+  }
+
+  ::selection {
+    background: #dbeafe;
+    color: #0f172a;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  @media (pointer: coarse) {
+    button, a, select, input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+    input, select, textarea { font-size: 16px; }
   }
 
   .material-symbols-outlined {
