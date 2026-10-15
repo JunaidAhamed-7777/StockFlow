@@ -51,6 +51,7 @@ export function AdminDashboard() {
   }, []);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
     <>
@@ -62,11 +63,12 @@ export function AdminDashboard() {
             <span className="text-secondary font-medium">Executive Command Center</span>
           </>
         }
-        title="Enterprise Operations & Global Command Center"
+        title="Operations overview"
+        description="Monitor stock availability, review recent orders, and act on inventory exceptions."
         badge={
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container text-on-surface text-label-sm font-medium">
-            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-            Live API
+            <span className="w-2 h-2 rounded-full bg-secondary" />
+            Inventory overview
           </span>
         }
         actions={
@@ -76,12 +78,11 @@ export function AdminDashboard() {
           </>
         }
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-base">
         <StatCard label="Total Products" value={formatNumber(metrics?.totalProducts)} icon="inventory_2" hint={`${formatNumber(metrics?.totalStock)} units on hand`} />
         <StatCard label="Critical Low Stock" value={formatNumber(metrics?.lowStockProducts)} icon="warning" tone="danger" hint="Products at or below threshold" />
         <StatCard label="Total Orders" value={formatNumber(metrics?.totalOrders)} icon="receipt_long" hint={`${formatNumber(metrics?.pendingOrders)} pending`} />
-        <StatCard label="Network Directory" value={formatNumber(metrics?.totalCustomers)} icon="groups" hint={`${formatNumber(metrics?.totalSuppliers)} suppliers`} />
+        <StatCard label="Customers" value={formatNumber(metrics?.totalCustomers)} icon="groups" hint={`${formatNumber(metrics?.totalSuppliers)} suppliers in your network`} />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
         <Card className="lg:col-span-7">

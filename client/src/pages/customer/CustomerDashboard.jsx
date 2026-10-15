@@ -43,16 +43,16 @@ export function CustomerDashboard() {
   }, []);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
     <>
       <PageHeader
         breadcrumb={<><span>Procurement</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Customer desk</span></>}
-        title="Customer Procurement Dashboard"
-        description="Order activity and spend are calculated from your authenticated account."
+        title="Procurement overview"
+        description="Your orders, spending, and available supplies in one place."
         actions={<Button variant="dark" onClick={() => navigate("/customer/products")}>Open catalog</Button>}
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-base">
         <StatCard label="Orders" value={formatNumber(metrics?.orderCount)} icon="receipt_long" />
         <StatCard label="Pending" value={formatNumber(metrics?.pendingOrders)} icon="hourglass_top" />

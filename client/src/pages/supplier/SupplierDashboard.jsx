@@ -62,16 +62,16 @@ export function SupplierDashboard() {
   }, [supplier?.id]);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
     <>
       <PageHeader
         breadcrumb={<><span>Supplier Portal</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Inbound Hub</span></>}
         title={`${supplier?.companyName || "Supplier"} operations`}
-        description="Metrics are scoped to products and orders your supplier account is authorized to see."
+        description="Keep your catalog healthy, replenish low stock, and review customer orders."
         actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")}>Add product</Button>}
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-space-base">
         <StatCard label="Your SKUs" value={formatNumber(metrics?.productCount)} icon="inventory_2" />
         <StatCard label="Units on hand" value={formatNumber(metrics?.stock)} icon="warehouse" />
