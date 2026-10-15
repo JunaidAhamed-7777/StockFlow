@@ -6,13 +6,16 @@ import { PageHeader } from "./ui/PageHeader";
 import { Card } from "./ui/Card";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
-import { Badge } from "./ui/Badge";
 import { ErrorState } from "./ui/ErrorState";
 import { Loading } from "./ui/Loading";
+import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
+import { clearFieldError, focusFirstError, validateForm } from "../utils/formValidation";
 
 export function ProfilePage() {
   const { user, refreshUser, supplier } = useAuth();
   const [form, setForm] = useState({ name: "", email: "" });
+  const [initialForm, setInitialForm] = useState({ name: "", email: "" });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -27,7 +30,11 @@ export function ProfilePage() {
       setLoadError("");
       try {
         const profile = await getProfile();
-        if (!cancelled) setForm({ name: profile.name || "", email: profile.email || "" });
+        if (!cancelled) {
+          const values = { name: profile.name || "", email: profile.email || "" };
+          setForm(values);
+          setInitialForm(values);
+        }
       } catch (err) {
         if (!cancelled) setLoadError(getErrorMessage(err));
       } finally {
@@ -43,17 +50,20 @@ export function ProfilePage() {
   async function onSubmit(event) {
     event.preventDefault();
     if (saving) return;
-    if (!form.name.trim() || !form.email.trim()) {
-      setError("Enter your name and email address.");
-      return;
-    }
+    const errors = validateForm(event.currentTarget);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) { focusFirstError(event.currentTarget, errors); return; }
     setSaving(true);
     setError("");
     setMessage("");
     try {
-      await updateProfile({ name: form.name.trim(), email: form.email.trim() });
-      await refreshUser();
+      const updated = await updateProfile({ name: form.name.trim(), email: form.email.trim() });
+      const values = { name: updated.name, email: updated.email };
+      setForm(values);
+      setInitialForm(values);
       setMessage("Profile updated.");
+      try { await refreshUser(); }
+      catch { setError("Your profile was saved, but account details could not be refreshed. Reload the page to see the latest details."); }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -66,6 +76,7 @@ export function ProfilePage() {
 
   return (
     <>
+      <UnsavedChangesGuard dirty={JSON.stringify(form) !== JSON.stringify(initialForm)} busy={loading || saving} />
       <PageHeader
         breadcrumb={
           <>
@@ -74,25 +85,24 @@ export function ProfilePage() {
             <span className="text-secondary font-medium">Profile</span>
           </>
         }
-        title="Profile & account"
-        description="Keep your name and contact details up to date. Your role determines which workspace you can access."
-        badge={<Badge tone="info">{user?.role}</Badge>}
+        title="Profile"
+        description="Update your name and email address."
       />
       {error ? <ErrorState message={error} /> : null}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
         <Card className="lg:col-span-8 p-space-xl">
-          <form onSubmit={onSubmit} className="flex flex-col gap-space-md max-w-xl">
-            <Input id="name" label="Display name" autoComplete="name" maxLength={200} disabled={saving} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            <Input id="email" label="Email address" type="email" autoComplete="email" maxLength={254} disabled={saving} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <form noValidate onSubmit={onSubmit} aria-busy={saving} className="flex flex-col gap-space-md max-w-xl">
+            <Input id="name" name="name" label="Display name" error={fieldErrors.name} autoComplete="name" maxLength={200} disabled={saving} value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setFieldErrors((current) => clearFieldError(current, "name")); setMessage(""); }} required />
+            <Input id="email" name="email" label="Email address" error={fieldErrors.email} type="email" autoComplete="email" autoCapitalize="none" maxLength={254} disabled={saving} value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setFieldErrors((current) => clearFieldError(current, "email")); setMessage(""); }} required />
             <Button type="submit" loading={saving}>Save profile</Button>
             <p className="font-caption text-caption text-secondary" role="status" aria-live="polite">{message}</p>
           </form>
         </Card>
         <Card className="lg:col-span-4 p-space-xl space-y-space-sm">
-          <h2 className="font-headline-sm text-headline-sm">Session identity</h2>
+          <h2 className="font-headline-sm text-headline-sm">Account details</h2>
           <dl className="space-y-space-sm font-body-sm text-body-sm">
-            <div className="flex justify-between gap-space-sm"><dt className="text-on-surface-variant">User ID</dt><dd className="font-mono-data">{user?.id}</dd></div>
-            <div className="flex justify-between gap-space-sm"><dt className="text-on-surface-variant">Role</dt><dd>{user?.role}</dd></div>
+            <div className="flex justify-between gap-space-sm"><dt className="text-on-surface-variant">Account number</dt><dd className="font-mono-data">{user?.id}</dd></div>
+            <div className="flex justify-between gap-space-sm"><dt className="text-on-surface-variant">Account type</dt><dd>{{ ADMIN: "Administrator", SUPPLIER: "Supplier", CUSTOMER: "Customer" }[user?.role]}</dd></div>
             {supplier ? (
               <>
                 <div className="flex justify-between gap-space-sm"><dt className="text-on-surface-variant">Company</dt><dd className="text-right break-words">{supplier.companyName}</dd></div>
@@ -100,7 +110,6 @@ export function ProfilePage() {
               </>
             ) : null}
           </dl>
-          <p className="font-caption text-on-surface-variant pt-space-sm">Role changes, password updates, and supplier company edits are not available in this workspace.</p>
         </Card>
       </div>
     </>
