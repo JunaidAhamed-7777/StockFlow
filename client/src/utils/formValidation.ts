@@ -14,7 +14,7 @@ export function validateForm(form: HTMLFormElement): FieldErrors {
   for (const field of controls(form)) {
     const key = field.name || field.id;
     if (!key || field.disabled || field.matches(':disabled') || ('readOnly' in field && field.readOnly) || ['submit', 'button', 'hidden', 'reset'].includes(field.type)) continue;
-    const label = (field.labels?.[0]?.textContent || key).replace(/\s+/g, ' ').trim().toLowerCase();
+    const label = (field.labels?.[0]?.textContent || field.getAttribute('aria-label') || key).replace(/\s+/g, ' ').trim().toLowerCase();
     const value = field.value;
     const isSecret = field.type === 'password' || /password/i.test(field.name) || /password/.test(field.autocomplete);
     const empty = isSecret ? value.length === 0 : value.trim().length === 0;
