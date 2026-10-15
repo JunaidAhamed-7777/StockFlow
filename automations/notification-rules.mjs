@@ -7,12 +7,12 @@ export function planNotifications(input) {
   const ratio = Math.min(1, Math.max(0, Number(criticalRatio) || 0.5));
   const cooldown = Math.max(1, Number(reminderHours) || 24) * 3600000;
   const day = new Date(now).toISOString().slice(0, 10);
-  const validEmail = (email) => typeof email === 'string' && /^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[a-z]{2,}$/i.test(email) && !/@(?:.*\.)?(?:example\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) && !/\.(?:test|local|invalid|example)$/i.test(email);
+  const validEmail = (email) => typeof email === 'string' && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(email) && !/@(?:.*\.)?(?:example\.(?:com|org|net)|localhost|invalid|test|local)$/i.test(email) && !/\.(?:test|local|invalid|example)$/i.test(email);
   const safe = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, 180);
   const stock = products.map((product) => {
-    const quantity = Number(product.quantity);
-    const threshold = Number(product.lowStockThreshold);
-    if (!Number.isSafeInteger(Number(product.id)) || !Number.isSafeInteger(quantity) || quantity < 0 || !Number.isSafeInteger(threshold) || threshold < 0) throw new Error('Invalid stock values; refusing to send inaccurate alerts.');
+    const quantity = product.quantity;
+    const threshold = product.lowStockThreshold;
+    if (!Number.isSafeInteger(product.id) || product.id <= 0 || !Number.isSafeInteger(product.supplierId) || product.supplierId <= 0 || !Number.isSafeInteger(quantity) || quantity < 0 || !Number.isSafeInteger(threshold) || threshold < 0) throw new Error('Invalid stock values; refusing to send inaccurate alerts.');
     return { ...product, quantity, lowStockThreshold: threshold };
   });
   const notifications = [];
@@ -71,5 +71,15 @@ export function recordSuccessfulDelivery(state, notification) {
   if (!notification?.events?.length) throw new Error('Cannot record an empty notification.');
   state.sent ||= {};
   for (const event of notification.events) state.sent[event.key] = { ...event };
+  return state;
+}
+
+export function clearRecoveredStock(state, products, criticalRatio = 0.5) {
+  const ratio = Math.min(1, Math.max(0, Number(criticalRatio) || 0.5));
+  for (const product of products) {
+    if (Number.isSafeInteger(product.quantity) && Number.isSafeInteger(product.lowStockThreshold) && product.quantity > Math.floor(product.lowStockThreshold * ratio)) {
+      delete state.sent?.[`stock:${product.supplierId}:${product.id}`];
+    }
+  }
   return state;
 }
