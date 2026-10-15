@@ -110,7 +110,7 @@ export function AdminProducts() {
         actions={<Button variant="dark" onClick={() => navigate("/admin/products/new")} icon={<Icon name="add" size={16} />}>Add Product</Button>}
       />
       <Card className="p-space-base">
-      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col lg:flex-row gap-space-sm lg:items-center" aria-label="Filter inventory catalog">
+      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-center" aria-label="Filter inventory catalog">
         <ToolbarSearch value={search} onChange={setSearch} placeholder="Search name, SKU, description" />
         <Select aria-label="Filter by category" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">All categories</option>

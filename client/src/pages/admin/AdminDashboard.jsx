@@ -80,7 +80,7 @@ export function AdminDashboard() {
       />
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-base">
         <StatCard label="Total Products" value={formatNumber(metrics?.totalProducts)} icon="inventory_2" hint={`${formatNumber(metrics?.totalStock)} units on hand`} />
-        <StatCard label="Critical Low Stock" value={formatNumber(metrics?.lowStockProducts)} icon="warning" tone="danger" hint="Products at or below threshold" />
+        <StatCard label="Low-stock products" value={formatNumber(lowStock.length)} icon="warning" tone="danger" hint="Products at or below their reorder threshold" />
         <StatCard label="Total Orders" value={formatNumber(metrics?.totalOrders)} icon="receipt_long" hint={`${formatNumber(metrics?.pendingOrders)} pending`} />
         <StatCard label="Customers" value={formatNumber(metrics?.totalCustomers)} icon="groups" hint={`${formatNumber(metrics?.totalSuppliers)} suppliers in your network`} />
       </section>
