@@ -41,12 +41,12 @@ export function AdminAI() {
       />
       <section aria-labelledby="agents-heading" className="space-y-space-md">
         <div><h2 id="agents-heading" className="text-lg font-semibold">Account review agents</h2><p className="mt-1 max-w-3xl text-sm text-on-surface-variant">GPT-5 mini prepares reviews and drafts from verified records. Each agent is bound to the account below; it does not act as the person currently signed in to StockFlow. Changes are applied through the relevant StockFlow screen.</p></div>
-        <Card><Table columns={agentColumns} rows={AGENTS} caption="Account review agents" /></Card>
+        <Card><Table columns={agentColumns} rows={AGENTS} caption="Account review agents" minWidth={760} /></Card>
         <p className="text-sm text-on-surface-variant">Budget guardrails: $3 per agent each month and $0.10 per session. Reviews appear in the agent’s n8n sessions. These limits are checked between model calls.</p>
       </section>
       <section aria-labelledby="notifications-heading" className="space-y-space-md">
         <div><h2 id="notifications-heading" className="text-lg font-semibold">Discord notifications</h2><p className="mt-1 max-w-3xl text-sm text-on-surface-variant">Posts go to one configured channel and identify the intended stock owner. These stock rules run without model calls. Preview workflows calculate results without posting.</p></div>
-        <Card><Table columns={workflowColumns} rows={WORKFLOWS} caption="Inventory notification workflows" /></Card>
+        <Card><Table columns={workflowColumns} rows={WORKFLOWS} caption="Inventory notification workflows" minWidth={760} /></Card>
         <p className="text-sm text-on-surface-variant">Channel members can see posted inventory and owner details. Stock owners receive no direct messages or email.</p>
       </section>
       <Card className="p-space-lg flex flex-col sm:flex-row justify-between gap-space-md sm:items-center">

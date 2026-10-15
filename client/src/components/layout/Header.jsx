@@ -83,9 +83,9 @@ export function Header({ onMenu, collapsed, mobileOpen }) {
         }} />
       </form>
       <div className="flex items-center gap-space-md shrink-0">
-        <Button className="hidden xl:inline-flex" onClick={() => navigate(headerAction.to)} icon={<Icon name={headerAction.icon} size={16} />}>
+        <div className="hidden xl:block"><Button onClick={() => navigate(headerAction.to)} icon={<Icon name={headerAction.icon} size={16} />}>
           {headerAction.label}
-        </Button>
+        </Button></div>
         {role === "CUSTOMER" ? (
           <button
             type="button"
