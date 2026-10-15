@@ -25,7 +25,11 @@ export function createDiscordPayload(notification) {
     'The intended owner was not contacted. This post uses the single Discord test channel only.',
     '',
   ].join('\n');
-  const details = `${clean(notification.subject, true)}\n\n${clean(notification.message)}`;
+  // The transport header already contains routing attribution. Keep the useful records
+  // rather than repeating the planner's introductory routing block in a short Discord post.
+  const divider = notification.message.indexOf('\n\n');
+  const body = notification.message.startsWith('SINGLE DISCORD TEST CHANNEL') && divider >= 0 ? notification.message.slice(divider + 2) : notification.message;
+  const details = `${clean(notification.subject, true)}\n\n${clean(body)}`;
   const truncation = '\n\n[DETAILS TRUNCATED: additional records or text omitted. Review StockFlow for the full grouped notification.]';
   let content = `${header}${details}`;
   if (content.length > 2000) {
