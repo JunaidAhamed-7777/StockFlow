@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFixtures, createQAServer, validateConfig } from "./qa-browser-server.mjs";
+import { originalProductPhotos } from "./data/demo-catalog.mjs";
 
 test("fixture sizes are bounded and reject inherited property names", () => {
   assert.deepEqual(validateConfig({ products: 100_000, orders: 100_000, suppliers: 10_000 }), { products: 100_000, orders: 100_000, suppliers: 10_000 });
@@ -29,6 +30,14 @@ test("deterministic fixtures preserve three-line totals and linked discovery rec
     }
   }
   assert.deepEqual(createFixtures({ products: 4, orders: 4, suppliers: 2 }), createFixtures({ products: 4, orders: 4, suppliers: 2 }));
+});
+
+test("photo failure mode exercises a mapped SKU under the external-image CSP", () => {
+  const config = validateConfig({ products: 1, orders: 0, photoFailure: true });
+  const [product] = createFixtures(config).products;
+  assert.ok(Object.hasOwn(originalProductPhotos, product.sku));
+  assert.throws(() => validateConfig({ photoFailure: "true" }));
+  assert.match(createFixtures({ ...config, photoFailure: false }).products[0].sku, /^QA-/);
 });
 
 test("loopback synthetic server isolates writes, filters fixtures, and sanitizes reports", async (t) => {

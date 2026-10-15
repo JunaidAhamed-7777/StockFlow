@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { originalProductPhotos } from "./data/demo-catalog.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultDist = path.resolve(here, "../client/dist");
@@ -15,6 +16,7 @@ export function validateConfig(input, previous = { products: 44, orders: 44, sup
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Expected a configuration object.");
   const result = { ...previous };
   for (const [key, value] of Object.entries(input)) {
+    if (key === "photoFailure" && typeof value === "boolean") { result[key] = value; continue; }
     if (!Object.hasOwn(limits, key) || !Number.isSafeInteger(value) || value < (key === "suppliers" ? 1 : 0) || value > limits[key]) {
       throw new Error(`Invalid fixture size: ${key}.`);
     }
@@ -35,7 +37,7 @@ export function createFixtures(config) {
     user: index ? { id: 100 + index, name: `Synthetic Supplier ${index + 1}`, email: `supplier${index + 1}@qa.example.test`, role: "SUPPLIER" } : users.SUPPLIER,
   }));
   const products = Array.from({ length: config.products }, (_, index) => ({
-    id: index + 1, name: `Synthetic Product ${String(index + 1).padStart(6, "0")}`, sku: `QA-${String(index + 1).padStart(6, "0")}`,
+    id: index + 1, name: `Synthetic Product ${String(index + 1).padStart(6, "0")}`, sku: config.photoFailure && index === 0 ? Object.keys(originalProductPhotos)[0] : `QA-${String(index + 1).padStart(6, "0")}`,
     description: "Synthetic inventory for isolated browser performance testing.", price: (index % 1000) + 1.25,
     quantity: index % 51, lowStockThreshold: 10, categoryId: (index % categories.length) + 1, supplierId: (index % suppliers.length) + 1,
     createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
