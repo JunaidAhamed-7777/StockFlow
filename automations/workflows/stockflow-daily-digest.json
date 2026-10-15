@@ -193,7 +193,8 @@
         "options": {
           "appendAttribution": false
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "remember-successful-delivery",
@@ -206,7 +207,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "function recordSuccessfulDelivery(state, notification) {\n  if (!notification?.events?.length) throw new Error('Cannot record an empty notification.');\n  state.sent ||= {};\n  for (const event of notification.events) state.sent[event.key] = { ...event };\n  return state;\n}\nconst notification = $('Delivery enabled').item.json;\nconst state = $getWorkflowStaticData('global');\nrecordSuccessfulDelivery(state, notification);\nreturn {json: {delivered: true, supplierId: notification.supplierId, eventCount: notification.events.length}};"
+        "jsCode": "function recordSuccessfulDelivery(state, notification) {\n  if (!notification?.events?.length) throw new Error('Cannot record an empty notification.');\n  state.sent ||= {};\n  for (const event of notification.events) state.sent[event.key] = { ...event };\n  return state;\n}\nconst notification = $('Delivery enabled').item.json;\nif ($json.error || !$json.id) return {json: {delivered: false, supplierId: notification.supplierId, note: 'Gmail did not confirm delivery. This owner will be retried on the next scheduled check.'}};\nconst state = $getWorkflowStaticData('global');\nrecordSuccessfulDelivery(state, notification);\nreturn {json: {delivered: true, supplierId: notification.supplierId, eventCount: notification.events.length}};"
       }
     },
     {
