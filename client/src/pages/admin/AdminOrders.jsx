@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { paginateRows } from "../../utils/listState.mjs";
+import { Pagination } from "../../components/ui/Pagination";
 import { getOrder, listOrders, updateOrderStatus } from "../../services/order.service";
 import { useAuth } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errors";
@@ -34,10 +37,18 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const { filters, setFilters } = useListFilters({ search: "", status: "" });
+  const [search, setSearch] = useState(filters.search);
+  const [linePage, setLinePage] = useState(1);
   const requestId = useRef(0);
+  const listRequestId = useRef(0);
   const isSupplier = role === "SUPPLIER";
+  const query = filters.search.toLowerCase();
+  const filteredOrders = orders.filter((order) => (!filters.status || order.status === filters.status) && (!query || `${order.id} ${order.customer?.name || ""} ${order.customer?.email || ""}`.toLowerCase().includes(query)));
+  const pagination = usePaginatedRows(filteredOrders, { ready: !loading && !error });
+  const linePagination = paginateRows(visibleItems(detail || {}), linePage);
+
+  useEffect(() => { setSearch(filters.search); }, [filters.search]);
 
   function visibleItems(order) {
     const items = order.orderItems || [];
@@ -53,20 +64,22 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
   }
 
   async function load() {
+    const activeRequest = ++listRequestId.current;
     setLoading(true);
     setError("");
     try {
-      setOrders(await listOrders());
+      const rows = await listOrders();
+      if (activeRequest === listRequestId.current) setOrders(rows);
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === listRequestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === listRequestId.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
-    return () => { requestId.current += 1; };
+    return () => { requestId.current += 1; listRequestId.current += 1; };
   }, []);
 
   async function openOrder(row) {
@@ -76,6 +89,7 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
     setDetailError("");
     setMessage("");
     setStatus("");
+    setLinePage(1);
     try {
       const full = await getOrder(row.id);
       if (activeRequest !== requestId.current) return;
@@ -115,27 +129,28 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
   if (loading) return <PageSkeleton />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  const filteredOrders = orders.filter((order) => (!statusFilter || order.status === statusFilter) && (!search.trim() || `${order.id} ${order.customer?.name || ""} ${order.customer?.email || ""}`.toLowerCase().includes(search.trim().toLowerCase())));
   const nextStatuses = NEXT_STATUSES[detail?.status] || [];
 
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Fulfillment</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Orders</span></>}
         title={title}
         description={description}
       />
-      <Card className="p-space-base flex flex-col sm:flex-row gap-space-sm">
-        <ToolbarSearch value={search} onChange={setSearch} placeholder="Find an order or customer" />
-        <Select value={statusFilter} aria-label="Filter orders by status" onChange={(event) => setStatusFilter(event.target.value)}>
+      <Card className="p-space-base">
+      <form className="flex flex-col sm:flex-row gap-space-sm" aria-label="Filter orders" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
+        <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Find an order or customer" label="Search orders" />
+        <Select value={filters.status} aria-label="Filter orders by status" onChange={(event) => setFilters({ status: event.target.value })}>
           <option value="">All statuses</option>
           {STATUSES.map((item) => <option key={item} value={item}>{item.charAt(0) + item.slice(1).toLowerCase()}</option>)}
         </Select>
+        <Button type="submit">Search</Button>
+      </form>
       </Card>
       <Card>
         <Table
-          rows={filteredOrders}
-          onRowClick={openOrder}
+          rows={pagination.rows}
+          caption={isSupplier ? "Your supplied orders" : "Customer orders"}
           empty={<EmptyState icon="receipt_long" title={orders.length ? "No matching orders" : "No orders yet"} description={orders.length ? "Try another search or status." : "Orders will appear here once a customer completes checkout."} />}
           columns={[
             { key: "id", header: "Order", render: (row) => <span className="font-mono-data">#{row.id}</span> },
@@ -146,6 +161,7 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
             { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View order ${row.id}`} onClick={(event) => { event.stopPropagation(); openOrder(row); }}>View</Button> },
           ]}
         />
+        <Pagination {...pagination} onPageChange={pagination.setPage} label="Orders" />
       </Card>
       <Modal
         open={Boolean(selected)}
@@ -175,7 +191,8 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
             {isSupplier && !canChangeOrder(detail) ? <p className="font-body-sm text-amber-800 bg-amber-50 border border-amber-200 rounded p-space-sm">This order includes items from other suppliers. An administrator must update its shared fulfillment status.</p> : null}
             {status === "CANCELLED" && detail.status !== "CANCELLED" ? <p className="font-body-sm text-amber-800 bg-amber-50 border border-amber-200 rounded p-space-sm">Cancelling an order does not restore inventory automatically. Record a stock adjustment if units are returned to stock.</p> : null}
             <Table
-              rows={visibleItems(detail)}
+              rows={linePagination.rows}
+              caption={`Order ${detail.id} items`}
               rowKey="id"
               empty={<EmptyState title="No line items" />}
               columns={[
@@ -186,6 +203,7 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
                 { key: "line", header: "Line", align: "right", render: (row) => formatCurrency(row.price * row.quantity) },
               ]}
             />
+            <Pagination {...linePagination} onPageChange={setLinePage} label="Order items" />
           </div>
         ) : null}
       </Modal>
@@ -194,5 +212,5 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
 }
 
 export function AdminOrders() {
-  return <OrdersPage title="Sales orders" description="Review customer orders and manage their fulfillment status." canUpdateStatus />;
+  return <OrdersPage title="Orders" description="Review customer orders and manage their fulfillment status." canUpdateStatus />;
 }
