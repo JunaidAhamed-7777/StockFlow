@@ -51,6 +51,8 @@ The current local installation passed its Discord connection test and has critic
 
 These workflows make no OpenAI calls. The root OpenAI API key stays private and is not needed for stock rules. AI forecast/recommendation endpoints remain unimplemented; the UI shows that limitation honestly.
 
+Three native n8n agents are also published: the repaired **Admin Notification**, **Supplier Assistant**, and **Customer Assistant**. They use GPT-5 mini and separate fixed-account, read-only tools for scheduled reviews and drafts. Their encrypted OpenAI credential comes from the root `.env`. Each has $3/month and $0.10/session budget guardrails; the three live verification sessions cost $0.00639355 in total. See [role-agent access, scope, schedules, and cost controls](automations/ROLE-AGENTS.md).
+
 ## Validate
 
 ```powershell
@@ -58,12 +60,14 @@ npm run typecheck
 npm run build
 npm run lint --workspace client
 npm test --workspace client
-node --test automations/*.test.mjs
-node automations/verify-local.mjs
+node --test "automations/*.test.mjs" "scripts/*.test.mjs"
+node automations/verify-role-agents.mjs
 npm audit --workspace client
 ```
 
-The n8n verifier refuses to run workflows whose executable graphs differ from the disabled-delivery source, including altered recipients or live-enabled settings. It reports only redacted execution summaries, with no bearer tokens. Run it before enabling live low-stock mail.
+The role-agent verifier reads configuration and budget metadata without calling a model. `node automations/verify-agent-tools.mjs` separately verifies and executes the three read-only API tools. The notification preview verifier, `node automations/verify-local.mjs`, intentionally refuses live-enabled settings; use it before enabling Discord delivery, as described in the automation guide.
+
+The final refinement passed TypeScript, lint, production build, 166 tests, and a strict UI ownership audit. Desktop/phone browser coverage and its limits are recorded in [the verification report](docs/VERIFICATION-2026-10-15.md).
 
 ## Scope and known limits
 

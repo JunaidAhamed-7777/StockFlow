@@ -19,13 +19,13 @@
     "failurePaths": "client/tests/auth-session.test.mjs"
   },
   "verificationStatus": {
-    "runtime": "Not established by this manifest; commands must be executed separately.",
-    "browserCrud": "Pending current implementation and browser verification.",
+    "runtime": "Passed 2026-10-15: typecheck, lint, 22 client tests, production build; strict UI ownership audit has zero findings.",
+    "browserCrud": "Desktop and phone read/navigation/validation paths verified for all roles. See docs/VERIFICATION-2026-10-15.md; mutation success and offline failure paths were not re-executed.",
     "formAdapter": "client/src/utils/formValidation.ts",
     "paginator": "client/src/components/ui/Pagination.jsx",
     "listState": "client/src/hooks/useListState.js",
     "unsavedGuard": "client/src/hooks/useUnsavedChanges.ts",
     "router": "client/src/main.jsx",
-    "operationalPageRollout": "In progress; final integrated runtime and browser verification pending."
+    "operationalPageRollout": "Complete: bounded client pagination and URL-restored filters/pages across catalog and operational lists. Product/order details restore their owning list."
   }
 }
