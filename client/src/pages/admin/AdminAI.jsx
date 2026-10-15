@@ -1,90 +1,59 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { getForecast, getRecommendations, getStockout } from "../../services/ai.service";
-import { getErrorMessage, isNotImplemented } from "../../utils/errors";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { UnavailableState } from "../../components/ui/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { Icon } from "../../components/ui/Icon";
-import { ErrorState } from "../../components/ui/ErrorState";
-import { Button } from "../../components/ui/Button";
-import { Badge } from "../../components/ui/Badge";
+import { Table } from "../../components/ui/Table";
 
-const WORKFLOWS = [
-  { title: "Critical stock alerts", icon: "notifications_active", schedule: "Every 15 minutes", description: "Groups products by their stock owner when quantity reaches zero or half the product's reorder threshold. Successful alerts have a 24-hour cooldown, with immediate out-of-stock escalation." },
-  { title: "Daily inventory digest", icon: "inventory_2", schedule: "Daily · 09:00 IST", description: "Summarizes each owner's inventory and products at or below their reorder threshold. One digest per owner per day." },
-  { title: "Open order follow-up", icon: "local_shipping", schedule: "Daily · 10:00 IST", description: "Flags pending or processing orders open for at least 48 hours. Each channel post groups only the intended supplier’s own order lines." },
-  { title: "Inventory data audit", icon: "fact_check", schedule: "Monday · 09:30 IST", description: "Reports missing ownership or categories, invalid stock and prices, and SKUs that need review. Posts an administrator report only when issues exist; it does not change records." },
-  { title: "New and changed orders", icon: "update", schedule: "Every 15 minutes", description: "Records an initial baseline, then reports new orders and observed status changes. Posts contain only the intended supplier’s order lines, with no historical notifications on first setup." },
+const AGENTS = [
+  { id: "admin", name: "Admin Notification", account: "StockFlow Local Automation", schedule: "Daily, 09:15", purpose: "Inventory exceptions, open orders, and a prioritized review list." },
+  { id: "supplier", name: "Supplier Assistant", account: "Supplier Test", schedule: "Weekdays, 09:30", purpose: "The account’s own products, order lines, and replenishment drafts." },
+  { id: "customer", name: "Customer Assistant", account: "Customer Test", schedule: "Mondays, 10:00", purpose: "The account’s order history, available products, and reorder drafts." },
 ];
 
-async function probe(label, fn) {
-  try {
-    const data = await fn();
-    return { label, status: "ready", data };
-  } catch (error) {
-    return {
-      label,
-      status: isNotImplemented(error) ? "unavailable" : "error",
-      message: getErrorMessage(error),
-    };
-  }
-}
+const WORKFLOWS = [
+  { id: "critical", name: "Critical stock alerts", schedule: "Every 15 minutes", delivery: "Enabled at setup", purpose: "Posts to Discord when stock reaches zero or half its reorder threshold." },
+  { id: "digest", name: "Inventory digest", schedule: "Daily, 09:00", delivery: "Preview", purpose: "Groups inventory totals and low-stock products by owner." },
+  { id: "follow-up", name: "Open order follow-up", schedule: "Daily, 10:00", delivery: "Preview", purpose: "Flags pending or processing orders open for at least 48 hours." },
+  { id: "audit", name: "Inventory data audit", schedule: "Mondays, 09:30", delivery: "Preview", purpose: "Reports missing ownership, invalid values, and catalog inconsistencies." },
+  { id: "updates", name: "Order updates", schedule: "Every 15 minutes", delivery: "Preview", purpose: "Reports new orders and observed status changes after an initial baseline." },
+];
+
+const agentColumns = [
+  { key: "name", header: "Agent", render: row => <span className="font-semibold">{row.name}</span> },
+  { key: "account", header: "StockFlow account" },
+  { key: "schedule", header: "Schedule · IST" },
+  { key: "purpose", header: "Review" },
+];
+const workflowColumns = [
+  { key: "name", header: "Workflow", render: row => <span className="font-semibold">{row.name}</span> },
+  { key: "schedule", header: "Schedule · IST" },
+  { key: "delivery", header: "Delivery at setup" },
+  { key: "purpose", header: "Purpose" },
+];
 
 export function AdminAI() {
-  const [results, setResults] = useState([]);
-  const [checking, setChecking] = useState(false);
-
-  async function checkAI() {
-    if (checking) return;
-    setChecking(true);
-    try {
-      setResults(await Promise.all([probe("Forecast", getForecast), probe("Stockout prediction", getStockout), probe("Recommendations", getRecommendations)]));
-    } finally { setChecking(false); }
-  }
-
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Core</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">AI Forecasting</span></>}
-        title="Automations & AI"
-        description="Review inventory rules and their intended recipients. Manage delivery through local n8n."
-        badge={
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container text-secondary text-label-sm">
-            <Icon name="hub" size={14} /> Local n8n
-          </span>
-        }
-        actions={<a href="http://localhost:5678/home/workflows" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-space-sm h-10 rounded-lg border border-outline-variant px-space-md text-sm font-semibold text-secondary hover:bg-surface">Open local n8n<Icon name="open_in_new" size={16} /></a>}
+        title="Automations"
+        description="Scheduled stock checks and account reviews, managed in local n8n."
+        actions={<a href="http://localhost:5678/assistant" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-space-sm rounded-lg bg-secondary px-space-md text-sm font-semibold text-white hover:bg-secondary/90">Open n8n<Icon name="open_in_new" size={16} /></a>}
       />
-      <Card className="p-space-lg space-y-space-sm">
-        <div className="flex items-center gap-space-sm flex-wrap"><h2 className="text-lg font-semibold">Notification workflows</h2><Badge tone="info">Discord delivery</Badge></div>
-        <p className="text-sm text-on-surface-variant">A Discord channel webhook is required before delivery can begin. All five workflows post to one chosen channel, and each post identifies its intended stock owner or administrator by name, recorded email, and supplier ID.</p>
-        <p className="text-sm text-on-surface-variant">Everyone who can read the channel can see its inventory details. Stock owners receive no direct messages or email. Mention syntax is neutralized; address at-signs display as [at]. Lengthy details are capped with a notice.</p>
-        <p className="text-sm text-on-surface-variant">Review a successful connection test in n8n before enabling critical stock alerts. The other workflows start in preview. These rules use recorded data and make no OpenAI calls.</p>
-        <p className="text-xs text-on-surface-variant">Definitions and schedules are shown here. Open n8n to check the connected credential, live delivery settings, and execution status.</p>
+      <section aria-labelledby="agents-heading" className="space-y-space-md">
+        <div><h2 id="agents-heading" className="text-lg font-semibold">Account review agents</h2><p className="mt-1 max-w-3xl text-sm text-on-surface-variant">GPT-5 mini prepares reviews and drafts from verified records. Each agent is bound to the account below; it does not act as the person currently signed in to StockFlow. Changes are applied through the relevant StockFlow screen.</p></div>
+        <Card><Table columns={agentColumns} rows={AGENTS} caption="Account review agents" /></Card>
+        <p className="text-sm text-on-surface-variant">Budget guardrails: $3 per agent each month and $0.10 per session. Reviews appear in the agent’s n8n sessions. These limits are checked between model calls.</p>
+      </section>
+      <section aria-labelledby="notifications-heading" className="space-y-space-md">
+        <div><h2 id="notifications-heading" className="text-lg font-semibold">Discord notifications</h2><p className="mt-1 max-w-3xl text-sm text-on-surface-variant">Posts go to one configured channel and identify the intended stock owner. These stock rules run without model calls. Preview workflows calculate results without posting.</p></div>
+        <Card><Table columns={workflowColumns} rows={WORKFLOWS} caption="Inventory notification workflows" /></Card>
+        <p className="text-sm text-on-surface-variant">Channel members can see posted inventory and owner details. Stock owners receive no direct messages or email.</p>
+      </section>
+      <Card className="p-space-lg flex flex-col sm:flex-row justify-between gap-space-md sm:items-center">
+        <div><h2 className="font-semibold">Keep reorder thresholds current</h2><p className="mt-1 text-sm text-on-surface-variant">Alerts use each product’s recorded quantity and threshold. Demand forecasting is not available.</p></div>
+        <Link to="/admin/inventory" className="inline-flex min-h-11 items-center whitespace-nowrap text-sm font-semibold text-secondary hover:underline">Review inventory<Icon name="arrow_forward" size={16} className="ml-2" /></Link>
       </Card>
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-space-base">
-        {WORKFLOWS.map((workflow) => <Card key={workflow.title} className="p-space-lg flex flex-col gap-space-md"><Icon name={workflow.icon} className="text-secondary" size={24} /><h2 className="font-semibold">{workflow.title}</h2><p className="text-xs font-semibold text-secondary">{workflow.schedule}</p><p className="text-sm text-on-surface-variant">{workflow.description}</p><Badge className="self-start">Rule-based · no AI cost</Badge></Card>)}
-      </div>
-      <Card className="p-space-lg flex flex-col sm:flex-row justify-between gap-space-md sm:items-center"><div><h2 className="font-semibold">Review reorder thresholds</h2><p className="text-sm text-on-surface-variant">Alert rules depend on each product&apos;s current quantity and threshold.</p></div><Link to="/admin/inventory" className="text-sm font-semibold text-secondary hover:underline">Open inventory →</Link></Card>
-      <UnavailableState
-        title="AI forecasting is not connected"
-        message="Demand forecasts and AI recommendations are not implemented by the current API. No predictions are generated or displayed. Local stock notifications can work independently."
-      />
-      <div><Button variant="outline" onClick={checkAI} loading={checking}>Check AI service availability</Button></div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-space-base" aria-live="polite" aria-busy={checking}>
-        {results.map((item) => (
-          <Card key={item.label} className="p-space-lg space-y-space-sm">
-            <div className="flex items-center gap-space-sm">
-              <Icon name="psychology" className="text-secondary" />
-              <h2 className="font-headline-sm">{item.label}</h2>
-            </div>
-            <p className="font-body-sm text-on-surface-variant">{item.message || "Service responded. Forecast rendering requires a supported result format."}</p>
-            {item.status === "error" ? <ErrorState message={item.message} /> : null}
-            <p className="font-caption uppercase tracking-wider text-outline">{item.status}</p>
-          </Card>
-        ))}
-      </div>
+      <p className="text-xs text-on-surface-variant">Setup summary recorded 15 October 2026. Open n8n for current schedules, delivery settings, and execution history. Local services must be running for scheduled tasks to execute.</p>
     </>
   );
 }
