@@ -131,7 +131,6 @@ export function CustomerProducts() {
                       <StatusBadge status={status} />
                     </div>
                     <h2 className="font-headline-sm text-headline-sm leading-snug break-words">{product.name}</h2>
-                    <p className="font-body-sm text-on-surface-variant line-clamp-2 min-h-[42px]">{product.description || "Contact the supplier for product details."}</p>
                     <p className="font-caption text-outline">{product.category?.name || "Uncategorized"} · {product.supplier?.companyName || "Supplier unavailable"}</p>
                     <div className="flex items-center justify-between font-body-sm mt-auto pt-space-sm">
                       <span className="font-headline-md tabular-nums">{formatCurrency(product.price)}</span>
