@@ -34,3 +34,16 @@ test('draft versions, disabled tasks and changed scheduled objectives fail verif
     assert.throws(() => verifyPublishedAgent(...values));
   }
 });
+
+test('an editor-style enabled-memory draft is rejected and the original published configuration still passes', () => {
+  for (const plan of ROLE_AGENT_PLANS) {
+    const values = fixture(plan);
+    values[2].memory.enabled = true;
+    assert.throws(() => verifyPublishedAgent(...values), /configuration differs/);
+    values[1].versionId = 'UnpublishedEditorDraft';
+    assert.throws(() => verifyPublishedAgent(...values), /configuration differs/);
+    values[2].memory.enabled = false;
+    values[1].versionId = values[1].activeVersionId;
+    assert.doesNotThrow(() => verifyPublishedAgent(...values));
+  }
+});

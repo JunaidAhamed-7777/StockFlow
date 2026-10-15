@@ -49,7 +49,9 @@ export function validateDatabaseContainer(container, config) {
 export function validateN8nContainer(container, expectedId) {
   const image = String(container?.Config?.Image || '');
   const bindings = container?.HostConfig?.PortBindings?.['5678/tcp'] || [];
-  const persistent = container?.Mounts?.some((mount) => mount.Destination === '/home/node/.n8n');
+  const persistent = container?.Mounts?.some((mount) => mount.Destination === '/home/node/.n8n'
+    && ((mount.Type === 'volume' && typeof mount.Name === 'string' && mount.Name.trim())
+      || (mount.Type === 'bind' && typeof mount.Source === 'string' && mount.Source.trim())));
   if (!container?.Id || (expectedId && expectedId !== container.Id)
     || !/^(docker\.n8n\.io\/)?n8nio\/n8n(?::|@|$)/.test(image)
     || !bindings.some((binding) => binding.HostPort === '5678') || !persistent) {

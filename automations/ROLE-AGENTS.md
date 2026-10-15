@@ -63,3 +63,19 @@ All three native configurations passed validation, were published, and were runn
 One short live model session per agent succeeded, each with exactly one successful assigned tool call. n8n recorded **$0.00243550** for ADMIN, **$0.00131280** for SUPPLIER, and **$0.00264525** for CUSTOMER: **$0.00639355 total**, below the user's $10–$15 testing ceiling. No business records or external messages were created by these checks. Actual scheduled recurrence has not been observed through the next due time; enabled task references, schedules, published versions, and manual execution paths were verified.
 
 Private evidence is in `.local/role-agent-verification.json`, `.local/role-agent-tool-verification.json`, and `.local/role-agent-smoke-verification.json`. Session and execution IDs are retained there for inspection in n8n. Configuration verification can be repeated without spending on model calls.
+
+See [the native agent QA report](../docs/QA-ROLE-AGENTS.md) for the 16 October
+scope, installer-repeatability and zero-model-call checks. Prefer the read-only
+configuration verifier for inspection. The [editor investigation](../docs/QA-AGENT-EDITOR.md)
+confirmed that n8n 2.43.6 can autosave model defaults on opening an existing
+empty-model draft, and a non-memory field edit forces `memory.enabled: true`.
+That outer flag enables session persistence; cross-session episodic recall is
+controlled separately. Opening Build/Settings with a selected model did not
+change the disposable control, so the original configured-agent inspection
+trigger remains unproven.
+
+Repeat the strict verifier after editor inspection or edits. Back up an
+unexpected draft before using **Revert changes**, then verify the restored
+published configuration, tools and scheduled tasks. Do not publish an unexpected
+draft just to make current/published versions match. No reviewed stable upgrade
+has yet been verified to fix this normalization behavior.

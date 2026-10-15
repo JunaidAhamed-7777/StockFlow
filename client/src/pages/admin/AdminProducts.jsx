@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { useListFilters } from "../../hooks/useListState";
+import { useRemotePagination } from "../../hooks/useRemotePagination";
 import { Pagination } from "../../components/ui/Pagination";
-import { deleteProduct, listProducts } from "../../services/product.service";
+import { deleteProduct, listProductPage } from "../../services/product.service";
 import { getCategories, getSuppliers } from "../../services/discovery.service";
 import { getErrorMessage } from "../../utils/errors";
 import { enrichProducts, formatCurrency, stockStatus } from "../../utils/format";
@@ -27,7 +28,7 @@ export function AdminProducts() {
   const [category, setCategory] = useState(filters.category);
   const [supplier, setSupplier] = useState(filters.supplier);
   const [lowStock, setLowStock] = useState(filters.lowStock === "1");
-  const [products, setProducts] = useState([]);
+  const [productPage, setProductPage] = useState(null);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,31 +37,37 @@ export function AdminProducts() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [message, setMessage] = useState("");
-  const [loadedFilterKey, setLoadedFilterKey] = useState("");
+  const [loadedRequestKey, setLoadedRequestKey] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const requestId = useRef(0);
-  const filterKey = JSON.stringify(filters);
-  const pagination = usePaginatedRows(products, { ready: !loading && !error && loadedFilterKey === filterKey });
+  const requestController = useRef(null);
+  const pagination = useRemotePagination(productPage, { filters, loadedRequestKey, ready: !loading && !error });
+  const { requestedPage, requestKey } = pagination;
+  const busy = loading || (!error && !pagination.ready);
 
   async function load() {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
-      const params = {};
+      const params = { page: requestedPage, pageSize: 20 };
       if (filters.search) params.search = filters.search;
       if (filters.category) params.category = filters.category;
       if (filters.supplier) params.supplier = filters.supplier;
-      const [rows, cats, sups] = await Promise.all([listProducts(params), getCategories(), getSuppliers()]);
-      if (activeRequest !== requestId.current) return;
+      if (filters.lowStock === "1") params.stock = "low";
+      const [result, cats, sups] = await Promise.all([listProductPage(params, { signal: controller.signal }), getCategories(), getSuppliers()]);
+      if (activeRequest !== requestId.current || controller.signal.aborted) return;
       setCategories(cats || []);
       setSuppliers(sups || []);
-      const catalog = enrichProducts(rows || [], cats || [], sups || []);
-      setProducts(filters.lowStock === "1" ? catalog.filter((item) => stockStatus(item) !== "IN") : catalog);
-      setLoadedFilterKey(filterKey);
+      setProductPage({ ...result, rows: enrichProducts(result.rows, cats || [], sups || []) });
+      setLoadedRequestKey(requestKey);
     } catch (err) {
-      if (activeRequest === requestId.current) setError(getErrorMessage(err));
+      if (activeRequest === requestId.current && !controller.signal.aborted) setError(getErrorMessage(err));
     } finally {
-      if (activeRequest === requestId.current) setLoading(false);
+      if (activeRequest === requestId.current && !controller.signal.aborted) setLoading(false);
     }
   }
 
@@ -69,9 +76,12 @@ export function AdminProducts() {
     setCategory(filters.category);
     setSupplier(filters.supplier);
     setLowStock(filters.lowStock === "1");
-    load();
-    return () => { requestId.current += 1; };
   }, [filters.search, filters.category, filters.supplier, filters.lowStock]);
+
+  useEffect(() => {
+    load();
+    return () => { requestId.current += 1; requestController.current?.abort(); };
+  }, [requestKey, refreshKey]);
 
   const columns = useMemo(
     () => [
@@ -104,7 +114,7 @@ export function AdminProducts() {
       await deleteProduct(pendingDelete.id);
       setPendingDelete(null);
       setMessage("Product deleted.");
-      await load();
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setDeleteError(getErrorMessage(err));
     } finally {
@@ -134,12 +144,12 @@ export function AdminProducts() {
           <input type="checkbox" checked={lowStock} onChange={(e) => setLowStock(e.target.checked)} className="accent-secondary" />
           Low stock
         </label>
-        <Button type="submit" disabled={loading}>Apply filters</Button>
+        <Button type="submit" disabled={busy}>Apply filters</Button>
       </form>
       </Card>
       {message ? <p role="status" className="text-sm text-secondary">{message}</p> : null}
       {error ? <ErrorState message={error} onRetry={load} /> : null}
-      {loading ? <PageSkeleton /> : !error && (
+      {busy ? <PageSkeleton /> : !error && (
         <Card>
           <Table rows={pagination.rows} columns={columns} caption="Products" empty={<EmptyState icon="inventory_2" title="No products found" description="Adjust filters or create a product." actionLabel="Create product" onAction={() => navigate("/admin/products/new", { state: { returnTo } })} />} />
           <Pagination {...pagination} onPageChange={pagination.setPage} label="Products" />

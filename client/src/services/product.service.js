@@ -1,6 +1,13 @@
 import { api, unwrap } from "./api";
 import { asArray, toId } from "../utils/apiData";
 import { MAX_QUANTITY } from "../utils/cart";
+import { pagedReadQuery, normalizeReadPage } from "../utils/pagedReads.mjs";
+
+export async function listProductPage(options = {}, { signal } = {}) {
+  const params = pagedReadQuery("products", options);
+  const response = await api.get("/products", { params, signal });
+  return normalizeReadPage("products", response.data, params);
+}
 
 export async function listProducts(params = {}) {
   const query = {};
@@ -15,8 +22,8 @@ export async function listProducts(params = {}) {
   return asArray(unwrap(response));
 }
 
-export async function getProduct(id) {
-  const response = await api.get(`/products/${toId(id)}`);
+export async function getProduct(id, { signal } = {}) {
+  const response = await api.get(`/products/${toId(id)}`, { signal });
   return unwrap(response);
 }
 

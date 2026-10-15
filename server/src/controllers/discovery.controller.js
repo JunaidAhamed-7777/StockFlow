@@ -1,4 +1,5 @@
-const { getCategories, getSuppliers, getSupplierById } = require('../services/discoveryService');
+const { getCategories, getSuppliers, getSupplierById, getSupplierPage } = require('../services/discoveryService');
+const { pageRequested, readError } = require('../services/readQuery');
 
 const categoriesController = async (req, res, next) => {
   try {
@@ -11,6 +12,8 @@ const categoriesController = async (req, res, next) => {
 
 const suppliersController = async (req, res, next) => {
   try {
+    if (pageRequested(req.query)) return res.json(await getSupplierPage(req.query));
+    if (Object.hasOwn(req.query, 'includeProductCounts')) throw readError('Supplier aggregates require page');
     const suppliers = await getSuppliers();
     res.json({ success: true, data: suppliers });
   } catch (err) {

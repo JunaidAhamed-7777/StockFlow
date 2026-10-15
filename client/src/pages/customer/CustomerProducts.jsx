@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { useListFilters } from "../../hooks/useListState";
+import { useRemotePagination } from "../../hooks/useRemotePagination";
 import { Pagination } from "../../components/ui/Pagination";
-import { listProducts } from "../../services/product.service";
+import { listProductPage } from "../../services/product.service";
 import { getCategories, getSuppliers } from "../../services/discovery.service";
 import { useCart } from "../../context/CartContext";
 import { getErrorMessage } from "../../utils/errors";
@@ -29,38 +30,43 @@ export function CustomerProducts() {
   const [search, setSearch] = useState(filters.search);
   const [category, setCategory] = useState(filters.category);
   const [supplier, setSupplier] = useState(filters.supplier);
-  const [products, setProducts] = useState([]);
+  const [productPage, setProductPage] = useState(null);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [loadedFilterKey, setLoadedFilterKey] = useState("");
+  const [loadedRequestKey, setLoadedRequestKey] = useState("");
   const requestId = useRef(0);
+  const requestController = useRef(null);
   const resultsRef = useRef(null);
-  const filterKey = JSON.stringify(filters);
-  const pagination = usePaginatedRows(products, { pageSize: PAGE_SIZE, ready: !loading && !error && loadedFilterKey === filterKey });
-  const { page, rows: visibleProducts } = pagination;
+  const focusResults = useRef(false);
+  const pagination = useRemotePagination(productPage, { filters, pageSize: PAGE_SIZE, loadedRequestKey, ready: !loading && !error });
+  const { page, rows: visibleProducts, total, requestedPage, requestKey } = pagination;
+  const busy = loading || (!error && !pagination.ready);
 
   async function load() {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     const activeRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
-      const params = {};
+      const params = { page: requestedPage, pageSize: PAGE_SIZE };
       if (filters.search) params.search = filters.search;
       if (filters.category) params.category = filters.category;
       if (filters.supplier) params.supplier = filters.supplier;
-      const [rows, cats, sups] = await Promise.all([listProducts(params), getCategories(), getSuppliers()]);
-      if (activeRequest !== requestId.current) return;
+      const [result, cats, sups] = await Promise.all([listProductPage(params, { signal: controller.signal }), getCategories(), getSuppliers()]);
+      if (activeRequest !== requestId.current || controller.signal.aborted) return;
       setCategories(cats || []);
       setSuppliers(sups || []);
-      setProducts(enrichProducts(rows || [], cats || [], sups || []));
-      setLoadedFilterKey(filterKey);
+      setProductPage({ ...result, rows: enrichProducts(result.rows, cats || [], sups || []) });
+      setLoadedRequestKey(requestKey);
     } catch (err) {
-      if (activeRequest === requestId.current) setError(getErrorMessage(err));
+      if (activeRequest === requestId.current && !controller.signal.aborted) setError(getErrorMessage(err));
     } finally {
-      if (activeRequest === requestId.current) setLoading(false);
+      if (activeRequest === requestId.current && !controller.signal.aborted) setLoading(false);
     }
   }
 
@@ -68,9 +74,18 @@ export function CustomerProducts() {
     setSearch(filters.search);
     setCategory(filters.category);
     setSupplier(filters.supplier);
-    load();
-    return () => { requestId.current += 1; };
   }, [filters.search, filters.category, filters.supplier]);
+
+  useEffect(() => {
+    load();
+    return () => { requestId.current += 1; requestController.current?.abort(); };
+  }, [requestKey]);
+
+  useEffect(() => {
+    if (!pagination.ready || !focusResults.current) return;
+    focusResults.current = false;
+    requestAnimationFrame(() => resultsRef.current?.focus());
+  }, [pagination.ready]);
 
   function clearFilters() {
     setSearch("");
@@ -86,8 +101,8 @@ export function CustomerProducts() {
   }
 
   function changePage(nextPage) {
+    focusResults.current = true;
     pagination.setPage(nextPage);
-    requestAnimationFrame(() => resultsRef.current?.focus());
   }
 
   return (
@@ -108,17 +123,17 @@ export function CustomerProducts() {
             <option value="">All suppliers</option>
             {suppliers.map((item) => <option key={item.id} value={item.id}>{item.companyName}</option>)}
           </Select>
-          <Button type="submit" disabled={loading}>Apply filters</Button>
-          <Button variant="ghost" onClick={clearFilters} disabled={loading}>Reset</Button>
+          <Button type="submit" disabled={busy}>Apply filters</Button>
+          <Button variant="ghost" onClick={clearFilters} disabled={busy}>Reset</Button>
         </form>
       </Card>
       <p className={notice ? "font-caption text-secondary" : "sr-only"} role="status" aria-live="polite">{notice}</p>
       {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
-      {loading ? <PageSkeleton /> : !error && (products.length === 0 ? (
+      {busy ? <PageSkeleton /> : !error && (total === 0 ? (
         <Card><EmptyState icon="storefront" title="No products found" description="Try a different search or clear your filters." actionLabel="Clear filters" onAction={clearFilters} /></Card>
       ) : (
         <>
-          <p ref={resultsRef} tabIndex={-1} className="font-body-sm text-on-surface-variant scroll-mt-20" role="status">{products.length} products · Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, products.length)}</p>
+          <p ref={resultsRef} tabIndex={-1} className="font-body-sm text-on-surface-variant scroll-mt-20" role="status">{total} products · Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-space-base">
             {visibleProducts.map((product) => {
               const status = stockStatus(product);

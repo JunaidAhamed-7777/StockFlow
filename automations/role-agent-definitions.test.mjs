@@ -155,7 +155,8 @@ test('private account parser rejects missing or blank passwords and cannot borro
 
 test('installer imports safely behind a direct-main guard and sources its encrypted OpenAI credential from root .env', () => {
   const installer = readFileSync(new URL('./configure-role-agents.mjs', import.meta.url), 'utf8');
-  assert.match(installer, /dotenv\.parse\(readFileSync\(path\.join\(projectRoot, '\.env'\), 'utf8'\)\)/);
+  assert.match(installer, /root = projectRoot/);
+  assert.match(installer, /dotenv\.parse\(readFileSync\(path\.join\(root, '\.env'\), 'utf8'\)\)/);
   assert.match(installer, /const apiKey = environment\.OPENAI_API_KEY/);
   assert.match(installer, /id: ROLE_AGENT_CREDENTIAL, name: 'StockFlow OpenAI GPT-5 mini', type: 'openAiApi', data: \{ apiKey, url: 'https:\/\/api\.openai\.com\/v1' \}/);
   assert.match(installer, /if \(process\.argv\[1\] && path\.resolve\(process\.argv\[1\]\) === fileURLToPath\(import\.meta\.url\)\) \{/);

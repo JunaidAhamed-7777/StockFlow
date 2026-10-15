@@ -6,6 +6,12 @@ Three additional [native role agents](ROLE-AGENTS.md) use GPT-5 mini for schedul
 
 **Local status verified on 15 October 2026: one labeled Discord connection test succeeded, and critical-stock alerts are enabled.** The other four workflows remain previews. The webhook is stored in n8n's encrypted credentials; the temporary URL file was deleted. All five installed graphs, credential bindings, published states, and disabled/enabled settings were checked after the activation restart. Private results are in `.local/discord-live-verification.json`. See [DISCORD.md](./DISCORD.md) for setup and activation. [MAIL-ROUTING.md](./MAIL-ROUTING.md) retains its filename for existing links and documents notification routing.
 
+The [16 October template migration](../docs/QA-NOTIFICATION-MIGRATION.md) applied
+the reviewed validation fixes and verified all five graphs and native trigger
+registrations after restart. Existing cooldowns, baselines, credentials and the
+critical-only destination policy were preserved. No additional connection post
+or manual delivery test was initiated.
+
 ## Workflows
 
 All five templates use existing endpoints. Schedules use **Asia/Kolkata**:
@@ -40,9 +46,15 @@ node automations/verify-local.mjs
 node --test "automations/*.test.mjs"
 ```
 
-An ordinary `--apply` restores **every workflow to `notificationsEnabled: false`**, preserving successful-delivery cooldowns and the initial order baseline. It retains the API credential binding, binds the selected Discord credential when available, saves a private backup in ignored `.local/n8n-backups/`, publishes the definitions, restarts n8n, and checks its health. A Discord credential is not required to install previews.
+An ordinary `--apply` restores **every workflow to `notificationsEnabled: false`**, preserving successful-delivery cooldowns and the initial order baseline. This migration requires all five installed notification workflows; use the installer for missing workflows. It saves the original full workflow export in ignored `.local/n8n-backups/`, pauses only the five notification schedules through n8n, and waits for their existing executions to finish before exporting their authoritative state again. It preserves that fresh state, API and Discord credential bindings, reviewed settings, and empty pinned data. Unexpected settings, pinned inputs, or a different Discord credential binding stop the migration before importing definitions. A Discord credential is not required to migrate previews without a Discord binding.
 
-`--apply --defer-restart` stores preview definitions without restarting immediately and records `restartPending`. Running schedules may still use their previous definitions until the restart. It cannot be combined with live activation.
+All five definitions and their preserved state are imported and verified while unpublished before the first publication. The publication service can resume schedules as soon as a definition is published, before restart; no further imports occur after publication starts. The updater records this phase as unverified, restarts n8n, waits for `/healthz/readiness`, rechecks all five stored graphs, state, settings and published versions, and checks their active status and activation errors. Its exact state comparison deliberately fails closed if a resumed scheduled execution changes cooldowns or baselines during verification; inspect the fresh state instead of restoring the earlier snapshot.
+
+Owner authentication for maintenance is used only by `--apply`; a dry run does not read the private owner login or authenticate to n8n. No connection test or manual workflow execution is part of migration. A failure leaves an explicit paused or unverified maintenance status and never restores old definitions automatically. If a failure occurs after workflow writes, the updater attempts to pause the five notification schedules again. Inspect that status and the private backup before retrying.
+
+Only one apply can run at a time. The private `.local/notification-update.lock` is released by its owning run; a lock left by an interrupted run is preserved for inspection rather than removed by guessing whether its process is still active.
+
+`--apply --defer-restart` stores published preview definitions without restarting immediately and records `published-pending-restart`, `restartPending: true` and `deliveryVerified: false`. Schedules may already be active through publication reconciliation; this status does not claim they remain paused. Complete a controlled restart and read-only verification before declaring the migration complete. It cannot be combined with live activation.
 
 The preview verifier checks all five installed graphs before executing any and rechecks each immediately before its run. It refuses any enabled or changed executable workflow, including changes to the planner, sanitization, transport, delivery guard, pinned data, or routing. It allows the encrypted Discord credential reference and harmless UI changes. **Do not use it to test live delivery.** Return to previews with an ordinary `--apply` first.
 
@@ -83,7 +95,7 @@ Repeated or ambiguous connection-test attempts are blocked for the same webhook 
 
 Cooldowns and baselines use [n8n workflow static data](https://docs.n8n.io/code/cookbook/builtin/get-workflow-static-data/), which persists after successful published executions. Manual editor tests do not persist it. Keep one local instance and avoid overlapping manual and scheduled sends. A network failure after Discord accepts a post, or concurrent executions, can still produce duplicates. A transactional outbox would require future backend work.
 
-The existing API has coarse roles, so the local automation account needs `ADMIN` to read all orders. Its password and runtime details remain in ignored `.local/`; account logins are documented privately by `node scripts/write-login-doc.mjs`. Workflow exports contain no passwords, webhook URLs, or OpenAI keys. The backend and database schema are unchanged.
+The existing API has coarse roles, so the local automation account needs `ADMIN` to read all orders. Its password and runtime details remain in ignored `.local/`; account logins are documented privately by `node scripts/write-login-doc.mjs`. Workflow exports contain no passwords, webhook URLs, or OpenAI keys. Notification tools use existing API routes and do not change authentication or the database schema.
 
 ## Changing the destination channel
 
@@ -92,3 +104,7 @@ Before replacing a stored webhook with a different one, **unpublish every workfl
 When the destination changes and its workflow users are unpublished, the helper restarts n8n **before importing the new credential** to flush old in-memory schedules. Save the new URL in the private input file, import it, and confirm a new connection test before re-enabling critical alerts. The previous webhook's test fingerprint cannot authorize the new destination. Review the changed test draft in n8n if the helper refuses to replace it.
 
 See the [Discord setup guide](./DISCORD.md), [notification-routing contract](./MAIL-ROUTING.md), and [n8n CLI reference](https://docs.n8n.io/hosting/cli-commands/).
+
+The [notification QA report](../docs/QA-NOTIFICATIONS.md) records isolated rule,
+preview and update-state checks, reproduced fixes and the distinction between
+reviewed source templates and the current live installation.

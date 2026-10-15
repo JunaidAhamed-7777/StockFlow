@@ -49,21 +49,44 @@ export function planNotifications(input) {
   const delivery = resolveDeliverySettings(input);
   if (!Array.isArray(products) || !Array.isArray(suppliers) || !Array.isArray(orders)) throw new Error('Invalid inventory response; refusing to generate notifications.');
   if (!['low-stock', 'daily-digest', 'stale-orders'].includes(mode)) throw new Error('Unknown notification mode.');
+  if (!Number.isFinite(now) || !Number.isFinite(new Date(now).getTime())) throw new Error('Invalid notification time.');
+  const positiveId = (value) => Number.isSafeInteger(value) && value > 0;
+  const ownerIds = new Set();
+  for (const supplier of suppliers) {
+    if (!supplier || !positiveId(supplier.id) || ownerIds.has(supplier.id)) throw new Error('Invalid or ambiguous owner directory; refusing notifications.');
+    ownerIds.add(supplier.id);
+  }
   const sent = state.sent || {};
   const ratio = Math.min(1, Math.max(0, Number(criticalRatio) || 0.5));
   const cooldown = Math.max(1, Number(reminderHours) || 24) * 3600000;
   const day = new Date(now).toISOString().slice(0, 10);
   const safe = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, 180);
+  const productMap = new Map();
   const stock = products.map((product) => {
+    if (!product || !positiveId(product.id) || !positiveId(product.supplierId)) throw new Error('Invalid stock values; refusing to send inaccurate alerts.');
     const quantity = product.quantity;
     const threshold = product.lowStockThreshold;
-    if (!Number.isSafeInteger(product.id) || product.id <= 0 || !Number.isSafeInteger(product.supplierId) || product.supplierId <= 0 || !Number.isSafeInteger(quantity) || quantity < 0 || !Number.isSafeInteger(threshold) || threshold < 0) throw new Error('Invalid stock values; refusing to send inaccurate alerts.');
+    if (!Number.isSafeInteger(quantity) || quantity < 0 || !Number.isSafeInteger(threshold) || threshold < 0) throw new Error('Invalid stock values; refusing to send inaccurate alerts.');
+    if (productMap.has(product.id) || !ownerIds.has(product.supplierId)) throw new Error('Invalid or ambiguous inventory ownership; refusing notifications.');
+    productMap.set(product.id, product);
     return { ...product, quantity, lowStockThreshold: threshold };
   });
+  if (mode === 'stale-orders') {
+    const orderIds = new Set();
+    for (const order of orders) {
+      if (!order || !positiveId(order.id) || orderIds.has(order.id) || typeof order.status !== 'string' || !order.status.trim() || order.status.length > 80 || /[\r\n\t]/.test(order.status)
+        || typeof order.createdAt !== 'string' || !Number.isFinite(Date.parse(order.createdAt)) || !Array.isArray(order.orderItems ?? order.items)) throw new Error('Invalid or ambiguous order response; refusing notifications.');
+      orderIds.add(order.id);
+      for (const item of order.orderItems ?? order.items) {
+        const id = item?.productId ?? item?.product?.id;
+        if (!positiveId(id) || !productMap.has(id) || !Number.isSafeInteger(item.quantity) || item.quantity <= 0) throw new Error('Invalid order line or unknown product; refusing notifications.');
+      }
+    }
+  }
   const notifications = [];
   const skipped = [];
   for (const supplier of suppliers) {
-    const own = stock.filter((product) => Number(product.supplierId) === Number(supplier.id));
+    const own = stock.filter((product) => product.supplierId === supplier.id);
     if (!own.length) continue;
     if (!createOwnerNotification({ supplier, mode, subject: '', ...delivery })) { skipped.push({ supplierId: supplier.id, reason: 'Missing or non-deliverable owner email' }); continue; }
     let lines = [];
@@ -95,11 +118,14 @@ export function planNotifications(input) {
         if (!['PENDING', 'PROCESSING'].includes(order.status)) continue;
         const created = Date.parse(order.createdAt);
         if (!Number.isFinite(created) || now - created < 48 * 3600000) continue;
-        const ownItems = (order.orderItems || order.items || []).filter((item) => own.some((product) => Number(product.id) === Number(item.productId ?? item.product?.id)));
+        const ownItems = (order.orderItems ?? order.items).filter((item) => productMap.get(item.productId ?? item.product?.id).supplierId === supplier.id);
         if (!ownItems.length) continue;
         const key = `order:${supplier.id}:${order.id}`;
         if (sent[key] && now - sent[key].at < cooldown) continue;
-        lines.push(`Order #${safe(order.id)} — ${safe(order.status)}, open since ${new Date(created).toISOString().slice(0, 10)}. Your items: ${ownItems.map((item) => `${safe(item.product?.sku || item.productId)} × ${safe(item.quantity)}`).join(', ')}.`);
+        lines.push(`Order #${safe(order.id)} — ${safe(order.status)}, open since ${new Date(created).toISOString().slice(0, 10)}. Your items: ${ownItems.map((item) => {
+          const product = productMap.get(item.productId ?? item.product?.id);
+          return `${safe(product.sku || product.id)} × ${item.quantity}`;
+        }).join(', ')}.`);
         events.push({ key, at: now });
       }
       subject = `StockFlow: ${lines.length} open ${lines.length === 1 ? 'order needs' : 'orders need'} follow-up`;

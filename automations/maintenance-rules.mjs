@@ -73,6 +73,9 @@ export function planMaintenanceNotifications(input) {
     if (!supplier || !positiveId(supplier.id) || ownerIds.has(supplier.id)) throw new Error('Invalid or ambiguous owner directory; refusing order notifications.');
     ownerIds.add(supplier.id);
   }
+  for (const product of productMap.values()) {
+    if (!ownerIds.has(product.supplierId)) throw new Error('Invalid inventory ownership; refusing order notifications.');
+  }
   const orderIds = new Set();
   for (const order of orders) {
     if (!order || !positiveId(order.id) || orderIds.has(order.id) || !present(order.status) || order.status.length > 80 || /[\r\n\t]/.test(order.status) || !Array.isArray(order.orderItems ?? order.items)) throw new Error('Invalid order response; refusing order notifications.');

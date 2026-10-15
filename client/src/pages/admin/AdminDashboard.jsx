@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getDashboard } from "../../services/dashboard.service";
-import { getLowStock } from "../../services/stock.service";
-import { listOrders } from "../../services/order.service";
-import { listProducts } from "../../services/product.service";
+import { listOrderPage } from "../../services/order.service";
+import { listProductPage } from "../../services/product.service";
 import { getErrorMessage } from "../../utils/errors";
 import { formatCurrency, formatNumber, stockStatus } from "../../utils/format";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -33,15 +32,17 @@ export function AdminDashboard() {
     try {
       const [dash, stock, orderRows, productRows] = await Promise.all([
         getDashboard(),
-        getLowStock(),
-        listOrders(),
-        listProducts(),
+        listProductPage({ page: 1, pageSize: 8, stock: "low" }),
+        listOrderPage({ page: 1, pageSize: 8 }),
+        listProductPage({ page: 1, pageSize: 8 }),
       ]);
       if (activeRequest !== requestId.current) return;
-      setMetrics(dash.metrics);
-      setLowStock(stock || []);
-      setOrders((orderRows || []).slice(0, 8));
-      setProducts((productRows || []).slice(0, 8));
+      setMetrics({ ...dash.metrics, totalProducts: productRows.summary.productCount,
+        totalStock: productRows.summary.totalQuantity, lowStockCount: productRows.summary.lowStockCount,
+        totalOrders: orderRows.summary.orderCount, pendingOrders: orderRows.summary.statusCounts.PENDING });
+      setLowStock(stock.rows);
+      setOrders(orderRows.rows);
+      setProducts(productRows.rows);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -71,7 +72,7 @@ export function AdminDashboard() {
       />
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-base">
         <StatCard label="Products" value={formatNumber(metrics?.totalProducts)} icon="inventory_2" hint={`${formatNumber(metrics?.totalStock)} units on hand`} />
-        <StatCard label="Low-stock products" value={formatNumber(lowStock.length)} icon="warning" tone="danger" hint="Products at or below their reorder threshold" />
+        <StatCard label="Low-stock products" value={formatNumber(metrics?.lowStockCount)} icon="warning" tone="danger" hint="Products at or below their reorder threshold" />
         <StatCard label="Orders" value={formatNumber(metrics?.totalOrders)} icon="receipt_long" hint={`${formatNumber(metrics?.pendingOrders)} pending`} />
         <StatCard label="Customers" value={formatNumber(metrics?.totalCustomers)} icon="groups" hint={`${formatNumber(metrics?.totalSuppliers)} suppliers`} />
       </section>
@@ -79,7 +80,7 @@ export function AdminDashboard() {
         <Card className="lg:col-span-7">
           <CardHeader title="Low-stock products" action={<Button variant="outline" onClick={() => navigate("/admin/inventory")}>View inventory</Button>} />
           <Table
-            rows={lowStock.slice(0, 8)}
+            rows={lowStock}
             caption="Low-stock products, up to eight shown"
             empty={<EmptyState icon="inventory_2" title="No low-stock items" description="All tracked SKUs are above their thresholds." />}
             columns={[
@@ -99,7 +100,7 @@ export function AdminDashboard() {
             onRowClick={(row) => navigate(`/admin/orders?search=${row.id}`)}
             columns={[
               { key: "id", header: "Order", render: (row) => <span className="font-mono-data">#{row.id}</span> },
-              { key: "totalAmount", header: "Total", align: "right", render: (row) => formatCurrency(row.totalAmount) },
+              { key: "visibleAmount", header: "Total", align: "right", render: (row) => formatCurrency(row.visibleAmount) },
               { key: "status", header: "Status", render: (row) => <OrderStatusBadge status={row.status} /> },
             ]}
           />

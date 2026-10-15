@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getDashboard } from "../../services/dashboard.service";
-import { listOrders } from "../../services/order.service";
-import { listProducts } from "../../services/product.service";
+import { listOrderPage } from "../../services/order.service";
+import { listProductPage } from "../../services/product.service";
 import { getErrorMessage } from "../../utils/errors";
 import { formatCurrency, formatNumber, stockStatus } from "../../utils/format";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -29,11 +28,13 @@ export function CustomerDashboard() {
     setLoading(true);
     setError("");
     try {
-      const [dash, orderRows, catalog] = await Promise.all([getDashboard(), listOrders(), listProducts()]);
+      const [orderRows, catalog] = await Promise.all([
+        listOrderPage({ page: 1, pageSize: 6 }), listProductPage({ page: 1, pageSize: 6 }),
+      ]);
       if (activeRequest !== requestId.current) return;
-      setMetrics(dash.metrics);
-      setOrders((orderRows || []).slice(0, 6));
-      setProducts((catalog || []).slice(0, 6));
+      setMetrics(orderRows.summary);
+      setOrders(orderRows.rows);
+      setProducts(catalog.rows);
     } catch (err) {
       if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
@@ -58,9 +59,9 @@ export function CustomerDashboard() {
       />
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-base">
         <StatCard label="Orders" value={formatNumber(metrics?.orderCount)} icon="receipt_long" />
-        <StatCard label="Pending" value={formatNumber(metrics?.pendingOrders)} icon="hourglass_top" />
-        <StatCard label="Delivered" value={formatNumber(metrics?.deliveredOrders)} icon="local_shipping" />
-        <StatCard label="Order value" value={formatCurrency(metrics?.totalSpending)} icon="payments" hint="Total value of your recorded orders" />
+        <StatCard label="Pending" value={formatNumber(metrics?.statusCounts.PENDING)} icon="hourglass_top" />
+        <StatCard label="Delivered" value={formatNumber(metrics?.statusCounts.DELIVERED)} icon="local_shipping" />
+        <StatCard label="Order value" value={formatCurrency(metrics?.visibleAmount)} icon="payments" hint="Total value of your recorded orders" />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
         <Card>
@@ -72,7 +73,7 @@ export function CustomerDashboard() {
             onRowClick={(row) => navigate(`/customer/orders/${row.id}`)}
             columns={[
               { key: "id", header: "Order", render: (row) => <span className="font-mono-data">#{row.id}</span> },
-              { key: "totalAmount", header: "Total", align: "right", render: (row) => formatCurrency(row.totalAmount) },
+              { key: "visibleAmount", header: "Total", align: "right", render: (row) => formatCurrency(row.visibleAmount) },
               { key: "status", header: "Status", render: (row) => <OrderStatusBadge status={row.status} /> },
             ]}
           />

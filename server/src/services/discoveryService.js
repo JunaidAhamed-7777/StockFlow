@@ -1,4 +1,5 @@
 const prisma = require('../prismaClient');
+const { getSupplierPage } = require('./pagedReadService').createPagedReads(prisma);
 
 const getCategories = async () => prisma.category.findMany();
 
@@ -17,4 +18,4 @@ const getSupplierById = async (id) => {
   return sup;
 };
 
-module.exports = { getCategories, getSuppliers, getSupplierById };
+module.exports = { getCategories, getSuppliers, getSupplierById, getSupplierPage };

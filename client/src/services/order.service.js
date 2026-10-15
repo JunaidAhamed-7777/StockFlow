@@ -1,6 +1,14 @@
 import { api, unwrap } from "./api";
 import { asArray, publicUser, toId } from "../utils/apiData";
 import { isPositiveInteger } from "../utils/cart";
+import { pagedReadQuery, normalizeReadPage } from "../utils/pagedReads.mjs";
+
+export async function listOrderPage(options = {}, { signal } = {}) {
+  const params = pagedReadQuery("orders", options);
+  const response = await api.get("/orders", { params, signal });
+  const result = normalizeReadPage("orders", response.data, params);
+  return { ...result, rows: result.rows.map((row) => row.customer ? { ...row, customer: publicUser(row.customer) } : row) };
+}
 
 function sanitizeOrder(order) {
   if (!order) return order;

@@ -18,6 +18,17 @@ The launcher starts or verifies these local services:
 
 The API and frontend launch as detached background processes. The command exits when all three HTTP services are healthy. Closing the terminal does not stop them. Repeating `npm run dev` verifies and reuses the recorded processes without launching duplicates.
 
+After the first successful setup, create the private login reference and open it
+locally to sign in with one of the seeded test accounts:
+
+```powershell
+node scripts/write-login-doc.mjs
+```
+
+The account reference is `.local/LOGIN-ACCOUNTS.md`; keep its values out of issues
+and shared logs. Open [the sign-in page](http://localhost:5173/login) and verify a
+workspace loads. HTTP readiness alone does not establish successful sign-in.
+
 ## Status, stop, and restart
 
 ```powershell
@@ -34,11 +45,19 @@ The equivalent direct commands are `node scripts/local-runtime.mjs status`, `sto
 
 `restart` restarts those verified application processes, ensures that the existing database and n8n containers are running, and waits for readiness again. It preserves their data and credentials. The launcher does not restart n8n while it is already running, because the existing n8n instance may also contain the user's other workflows.
 
-The runtime serializes start/stop/restart commands with `.local/runtime.lock`. If another command is still running, wait for it to finish. A lock whose recorded process no longer exists is removed automatically on the next attempt.
+The runtime serializes start/stop/restart commands with `.local/runtime.lock`. Its owner includes a PID, process creation time, script and unique token. Commands read runtime state only after acquiring the lock; marker updates use an atomic same-directory rename. If another command is running, wait for it to finish. A complete lock whose owner is proven absent, or whose PID has a different creation time, can be recovered automatically without stopping that process.
+
+Acquisition briefly uses `.local/runtime.lock.guard` so two commands cannot both recover the same stale lock. An existing guard, a partial/legacy lock or an unverifiable owner fails closed. Inspect the named file locally and confirm the owning command has stopped before manually removing only that lock or guard. Do not delete `runtime.json` as a lock-recovery step: it preserves resource identities and secrets.
 
 ## Database and n8n data
 
 First setup creates a new `stockflow-db` container and `stockflow_demo_pgdata` volume with a generated database password and JWT signing secret. It uses the existing, unchanged Prisma schema and original development seed. Schema creation and seeding run only when the local marker is uninitialized and the isolated database's public schema is empty. Subsequent starts do not push the schema or reseed the data.
+
+The launcher verifies generated Prisma schema/runtime artifacts before skipping
+client generation; the package's placeholder `index.js` is not sufficient. It
+does not replace a generated engine while a verified API process is using it.
+If client artifacts are invalid while that API is running, stop the verified
+runtime and retry instead of regenerating over a loaded Windows DLL.
 
 The launcher refuses to attach a pre-existing demo database or volume when this checkout has no ownership marker. It also refuses remote database hosts, mismatched credentials, unexpected port bindings or volumes, and a replacement container ID. It does not read the root `.env` to select a database. A production database configured elsewhere is not used by this launcher.
 
@@ -87,9 +106,13 @@ npm run typecheck
 npm run build
 npm run lint --workspace client
 npm test --workspace client
-node --test scripts/local-runtime.test.mjs
+node --test scripts/local-runtime.test.mjs scripts/local-runtime-flow.test.mjs scripts/runtime-lock.test.mjs
 ```
 
 Strict TypeScript checks cover the new shared foundations and typed API/storage boundaries. Existing JSX pages remain part of an incremental migration with `allowJs: true` and `checkJs: false`; the checks do not claim complete TypeScript coverage of every legacy page. The regression tests exercise cart/storage validation and runtime ownership checks without sending email or calling OpenAI.
 
 This launcher is for local development. Review [backend limitations](FRONTEND-LIMITATIONS.md) before exposing the application outside the local machine.
+
+See [lifecycle QA results](QA-LOCAL-RUNTIME.md) for the real browser/restart checks, isolated failure matrix and remaining clean-host verification.
+The [clean Windows follow-up](QA-CLEAN-WINDOWS.md) records the unavailable host,
+the fresh-generation fix and the actual run still required by #15.

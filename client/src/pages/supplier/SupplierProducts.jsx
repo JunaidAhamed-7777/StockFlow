@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { useListFilters } from "../../hooks/useListState";
+import { useRemotePagination } from "../../hooks/useRemotePagination";
 import { Pagination } from "../../components/ui/Pagination";
 import { useAuth } from "../../context/AuthContext";
-import { listProducts } from "../../services/product.service";
+import { listProductPage } from "../../services/product.service";
 import { getCategories } from "../../services/discovery.service";
 import { getErrorMessage } from "../../utils/errors";
 import { enrichProducts, formatCurrency, stockStatus } from "../../utils/format";
@@ -24,18 +25,23 @@ export function SupplierProducts() {
   const returnTo = location.pathname + location.search;
   const { filters, setFilters } = useListFilters({ search: "" });
   const [search, setSearch] = useState(filters.search);
-  const [products, setProducts] = useState([]);
+  const [productPage, setProductPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [loadedFilterKey, setLoadedFilterKey] = useState("");
+  const [loadedRequestKey, setLoadedRequestKey] = useState("");
   const requestId = useRef(0);
-  const filterKey = `${supplier?.id || ""}:${filters.search}`;
-  const pagination = usePaginatedRows(products, { ready: !loading && !error && loadedFilterKey === filterKey });
+  const requestController = useRef(null);
+  const pagination = useRemotePagination(productPage, { filters: { ...filters, supplier: supplier?.id || "" }, loadedRequestKey, ready: !loading && !error });
+  const { requestedPage, requestKey } = pagination;
+  const busy = loading || (!error && !pagination.ready);
 
   async function load() {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     const activeRequest = ++requestId.current;
     if (!supplier?.id) {
-      setProducts([]);
+      setProductPage(null);
       setLoading(false);
       setError("No supplier profile is linked to this account, so owned SKUs cannot be loaded.");
       return;
@@ -43,24 +49,27 @@ export function SupplierProducts() {
     setLoading(true);
     setError("");
     try {
-      const params = { supplier: supplier.id };
+      const params = { page: requestedPage, pageSize: 20, supplier: supplier.id };
       if (filters.search) params.search = filters.search;
-      const [rows, cats] = await Promise.all([listProducts(params), getCategories()]);
-      if (activeRequest !== requestId.current) return;
-      setProducts(enrichProducts(rows || [], cats || [], [supplier]));
-      setLoadedFilterKey(filterKey);
+      const [result, cats] = await Promise.all([listProductPage(params, { signal: controller.signal }), getCategories()]);
+      if (activeRequest !== requestId.current || controller.signal.aborted) return;
+      setProductPage({ ...result, rows: enrichProducts(result.rows, cats || [], [supplier]) });
+      setLoadedRequestKey(requestKey);
     } catch (err) {
-      if (activeRequest === requestId.current) setError(getErrorMessage(err));
+      if (activeRequest === requestId.current && !controller.signal.aborted) setError(getErrorMessage(err));
     } finally {
-      if (activeRequest === requestId.current) setLoading(false);
+      if (activeRequest === requestId.current && !controller.signal.aborted) setLoading(false);
     }
   }
 
   useEffect(() => {
     setSearch(filters.search);
+  }, [filters.search]);
+
+  useEffect(() => {
     load();
-    return () => { requestId.current += 1; };
-  }, [supplier?.id, filters.search]);
+    return () => { requestId.current += 1; requestController.current?.abort(); };
+  }, [requestKey]);
 
   const columns = useMemo(
     () => [
@@ -85,11 +94,11 @@ export function SupplierProducts() {
       <Card className="p-space-base">
       <form noValidate onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }} className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search your products">
         <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search name or SKU" label="Search products" />
-        <Button type="submit" disabled={loading}>Search</Button>
+        <Button type="submit" disabled={busy}>Search</Button>
       </form>
       </Card>
       {error ? <ErrorState message={error} onRetry={load} /> : null}
-      {loading ? <PageSkeleton /> : !error && (
+      {busy ? <PageSkeleton /> : !error && (
         <Card>
           <Table rows={pagination.rows} columns={columns} caption="Your products" empty={<EmptyState icon="inventory_2" title="No products found" description="Try another search or create your first product." actionLabel="Create product" onAction={() => navigate("/supplier/products/new", { state: { returnTo } })} />} />
           <Pagination {...pagination} onPageChange={pagination.setPage} label="Products" />
