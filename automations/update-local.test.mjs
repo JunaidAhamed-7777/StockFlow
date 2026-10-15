@@ -35,18 +35,25 @@ function fixture(t, { discord = true } = {}) {
     writeFileSync(path.join(sources, filename), raw);
     const previous = JSON.parse(raw);
     previous.active = true;
+    previous.versionId = `fixture-version-${id}`; previous.activeVersionId = previous.versionId;
     settings(previous).jsCode = settings(previous).jsCode.replace('notificationsEnabled: false', 'notificationsEnabled: true');
     previous.staticData = { global: { sent: { [`fixture:${id}`]: { at: 123456, quantity: 2 } }, orderBaseline: { initializedAt: 123000, statuses: { 5: 'PROCESSING' } } } };
     login(previous).credentials = { httpCustomAuth: { id: `FixtureLogin-${id}`, name: 'Existing encrypted API login' } };
     if (discord) transport(previous).credentials = { discordWebhookApi: { id: credential.id, name: credential.name } };
     workflows.set(id, previous);
   }
-  const state = { workflows, files: new Map(), ledger: [], credentialReads: 0, healthCalls: 0, waits: 0, logs: [], credential: structuredClone(credential) };
+  const state = { workflows, files: new Map(), ledger: [], credentialReads: 0, healthCalls: 0, waits: 0, logs: [], credential: structuredClone(credential), maintenanceCreations: 0, maintenanceCalls: [] };
   const dockerCapture = (command, input) => {
     state.ledger.push([...command]);
     if (state.dockerError) throw new Error(privateDetail);
     if (command[0] === 'inspect') return JSON.stringify([container]);
-    if (command[0] === 'restart') { assert.deepEqual(command, ['restart', 'n8n']); return ''; }
+    if (command[0] === 'restart') {
+      assert.deepEqual(command, ['restart', 'n8n']);
+      const status = JSON.parse(readFileSync(path.join(local, 'automation-status.json'), 'utf8'));
+      assert.equal(status.maintenanceState, 'restarting-unverified'); assert.equal(status.schedulesPaused, false);
+      assert.equal(status.enabledWorkflows, null); assert.equal(status.deliveryVerified, false);
+      return '';
+    }
     const script = command[command.indexOf('-e') + 1];
     if (command.includes('export:workflow')) {
       const filename = command.find((argument) => argument.startsWith('--output=')).slice('--output='.length);
@@ -55,12 +62,16 @@ function fixture(t, { discord = true } = {}) {
     if (command.includes('import:workflow')) {
       const filename = command.find((argument) => argument.startsWith('--input=')).slice('--input='.length);
       let workflow = JSON.parse(state.files.get(filename));
+      workflow.versionId = `imported-${workflow.id}`;
+      workflow.active = false; workflow.activeVersionId = null;
       if (state.transformStored) workflow = state.transformStored(workflow);
       state.workflows.set(workflow.id, workflow); return '';
     }
     if (command.includes('publish:workflow')) {
       const id = command.find((argument) => argument.startsWith('--id=')).slice('--id='.length);
       state.workflows.get(id).active = !state.publishInactive;
+      if (!state.publishInactive) state.workflows.get(id).activeVersionId = state.workflows.get(id).versionId;
+      if (state.transformPublished) state.workflows.set(id, state.transformPublished(state.workflows.get(id)));
       return '';
     }
     if (typeof script === 'string' && script.includes('writeFileSync')) {
@@ -81,11 +92,33 @@ function fixture(t, { discord = true } = {}) {
     root, args: ['--apply'], dockerCapture,
     exportCredential: (id) => { state.credentialReads++; assert.equal(id, credential.id); if (state.credentialError) throw new Error(privateDetail); return structuredClone(state.credential); },
     fetchImpl: async (url, options) => {
-      state.healthCalls++; assert.equal(url, 'http://localhost:5678/healthz'); assert.equal(options.redirect, 'error');
+      state.healthCalls++; assert.equal(url, 'http://localhost:5678/healthz/readiness'); assert.equal(options.redirect, 'error');
       if (state.healthError) throw new Error(privateDetail);
       return { ok: true };
     },
     wait: async () => { state.waits++; }, log: (value) => state.logs.push(value),
+    maintenanceFactory: () => {
+      state.maintenanceCreations++;
+      return {
+        quiesce: async (selected) => {
+          assert.deepEqual(selected.map((workflow) => workflow.id).sort(), Object.keys(WORKFLOW_MODES).sort());
+          state.maintenanceCalls.push('quiesce');
+          assert.equal(readdirSync(path.join(local, 'n8n-backups')).length, 1, 'the original backup precedes maintenance');
+          if (state.quiesceError) throw Object.assign(new Error(privateDetail), { paused: state.errorPaused === true });
+          for (const workflow of selected) {
+            const current = state.workflows.get(workflow.id);
+            current.active = false; current.activeVersionId = null; delete current.activeVersion;
+          }
+          state.afterQuiesce?.();
+        },
+        verifyActive: async (ids) => {
+          assert.deepEqual([...ids].sort(), Object.keys(WORKFLOW_MODES).sort());
+          state.maintenanceCalls.push('verifyActive');
+          state.afterVerify?.();
+          if (state.activeError) throw new Error(privateDetail);
+        },
+      };
+    },
   };
   const confirmationPath = path.join(local, 'discord-connection-test.json');
   const confirm = () => {
@@ -125,6 +158,8 @@ test('ordinary apply disables all previously enabled workflows and preserves coo
   const status = JSON.parse(readFileSync(f.statusPath, 'utf8'));
   assert.deepEqual(status.enabledWorkflows, []); assert.equal(status.restartPending, false); assert.equal(status.openAiCalls, 0);
   assert.equal(f.state.healthCalls, 1); assert.equal(f.state.files.size, 0);
+  assert.deepEqual(f.state.maintenanceCalls, ['quiesce', 'verifyActive']);
+  assert.equal(status.maintenanceState, 'complete'); assert.equal(status.deliveryVerified, true);
   if (process.platform !== 'win32') assert.equal(statSync(f.statusPath).mode & 0o777, 0o600);
   const backups = readdirSync(path.join(f.local, 'n8n-backups'));
   assert.equal(backups.length, 1);
@@ -147,6 +182,7 @@ test('dry run exports and validates proposals without importing, publishing, res
   assert.ok(f.state.ledger.every((command) => !command.includes('publish:workflow') && command[0] !== 'restart'));
   assert.equal(f.state.healthCalls, 0); assert.equal(f.state.waits, 0); assert.equal(f.state.files.size, 0);
   assert.equal(existsSync(path.join(f.local, 'n8n-backups')), false); assert.equal(existsSync(f.statusPath), false);
+  assert.equal(f.state.maintenanceCreations, 0, 'dry run never constructs owner-authenticated maintenance');
 });
 
 test('confirmed activation enables only critical stock delivery for the exact current webhook', async (t) => {
@@ -204,15 +240,19 @@ test('deferred preview restart stores disabled templates without a restart or he
   assert.ok(f.state.ledger.every((command) => command[0] !== 'restart'));
   assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).restartPending, true);
   assert.equal(f.state.waits, 0);
+  assert.deepEqual(f.state.maintenanceCalls, ['quiesce']);
+  assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-pending-restart');
 });
 
 test('lost stored static data refuses to report enabled delivery', async (t) => {
   const f = fixture(t); f.confirm();
   f.state.transformStored = (workflow) => { delete workflow.staticData; return workflow; };
   await assert.rejects(updateLocal({ ...f.options, args: ['--apply', '--enable-low-stock'] }), /Stored workflow verification failed/);
-  assert.equal(existsSync(f.statusPath), false); assert.equal(f.state.healthCalls, 0);
+  assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-after-failure'); assert.equal(f.state.healthCalls, 0);
   assert.ok(f.state.ledger.every((command) => command[0] !== 'restart'));
   assert.equal(f.state.files.size, 0);
+  assert.equal(f.state.maintenanceCalls.filter((call) => call === 'quiesce').length, 2);
+  assert.ok(Object.keys(WORKFLOW_MODES).every((id) => f.state.workflows.get(id).activeVersionId === null), 'failed publication must remain paused after a later restart too');
 });
 
 test('stored pinned data or changed execution settings cannot pass successful update verification', async (t) => {
@@ -222,9 +262,9 @@ test('stored pinned data or changed execution settings cannot pass successful up
     (workflow) => { workflow.settings.timezone = 'UTC'; return workflow; },
     (workflow) => { workflow.settings.saveManualExecutions = true; return workflow; },
   ]) {
-    const f = fixture(t); f.state.transformStored = tamper;
+    const f = fixture(t); f.state.transformPublished = tamper;
     await assert.rejects(updateLocal(f.options), /Stored workflow verification failed/);
-    assert.equal(existsSync(f.statusPath), false); assert.equal(f.state.healthCalls, 0);
+    assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-after-failure'); assert.equal(f.state.healthCalls, 0);
   }
 });
 
@@ -234,13 +274,13 @@ test('inactive publication and inconsistent exported active versions cannot prod
     (workflow) => { workflow.activeVersion = { nodes: [] }; return workflow; },
     (workflow) => { workflow.activeVersion = {}; return workflow; },
   ]) {
-    const f = fixture(t); f.state.transformStored = tamper;
+    const f = fixture(t); f.state.transformPublished = tamper;
     await assert.rejects(updateLocal(f.options), /Stored workflow verification failed/);
-    assert.equal(existsSync(f.statusPath), false);
+    assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-after-failure');
   }
   const f = fixture(t); f.state.publishInactive = true;
   await assert.rejects(updateLocal(f.options), /Stored workflow verification failed/);
-  assert.equal(existsSync(f.statusPath), false);
+  assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-after-failure');
 });
 
 test('enabled settings, altered transport, pinned data and disabled source nodes are rejected before import', async (t) => {
@@ -259,9 +299,98 @@ test('enabled settings, altered transport, pinned data and disabled source nodes
 test('boundary and malformed-export errors with private details are withheld from errors and logs', async (t) => {
   for (const mode of ['dockerError', 'credentialError', 'rawExport', 'healthError']) {
     const f = fixture(t); f.state[mode] = mode === 'rawExport' ? privateDetail : true;
-    await assert.rejects(updateLocal(f.options), (error) => !error.message.includes(privateDetail) && /withheld|did not become healthy/.test(error.message));
+    await assert.rejects(updateLocal(f.options), (error) => !error.message.includes(privateDetail) && /withheld|did not become ready/.test(error.message));
     assert.equal(f.state.logs.join('\n').includes(privateDetail), false);
-    assert.equal(existsSync(f.statusPath), false);
+    if (mode === 'healthError') assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-after-failure');
+    else assert.equal(existsSync(f.statusPath), false);
     if (mode === 'healthError') { assert.equal(f.state.healthCalls, 40); assert.equal(f.state.waits, 40); }
+  }
+});
+
+test('migration requires the complete installed set before backups, authentication or workflow writes', async (t) => {
+  for (const partial of [true, false]) {
+    const f = fixture(t);
+    if (partial) f.state.workflows.delete('StockFlowDigest01'); else f.state.workflows.clear();
+    await assert.rejects(updateLocal(f.options), /All five installed notification workflows/);
+    assert.equal(imports(f.state).length, 0); assert.equal(f.state.maintenanceCreations, 0);
+    assert.equal(existsSync(path.join(f.local, 'n8n-backups')), false); assert.equal(existsSync(f.statusPath), false);
+  }
+});
+
+test('fresh drained state and bindings are authoritative, while all unrelated workflows remain unchanged', async (t) => {
+  const f = fixture(t); f.confirm();
+  const unrelated = Array.from({ length: 4 }, (_, index) => ({ id: `unrelated-${index}`, versionId: `v${index}`, active: index > 0, nodes: [], connections: {}, staticData: { untouched: index } }));
+  for (const workflow of unrelated) f.state.workflows.set(workflow.id, structuredClone(workflow));
+  const original = structuredClone([...f.state.workflows.values()]);
+  f.state.afterQuiesce = () => {
+    for (const id of Object.keys(WORKFLOW_MODES)) {
+      const current = f.state.workflows.get(id);
+      current.staticData.global.sent['completed-during-drain'] = { at: 999999, quantity: 0 };
+      current.staticData.global.orderBaseline.statuses['99'] = 'SHIPPED';
+      current.settings.availableInMCP = false;
+      login(current).credentials.httpCustomAuth.name = 'Fresh preserved API reference';
+      transport(current).credentials.discordWebhookApi.name = 'Fresh preserved Discord reference';
+    }
+  };
+  await updateLocal({ ...f.options, args: ['--apply', '--enable-low-stock'] });
+  for (const id of Object.keys(WORKFLOW_MODES)) {
+    const current = f.state.workflows.get(id);
+    assert.deepEqual(current.staticData.global.sent['completed-during-drain'], { at: 999999, quantity: 0 });
+    assert.equal(current.staticData.global.orderBaseline.statuses['99'], 'SHIPPED');
+    assert.equal(current.settings.availableInMCP, false);
+    assert.equal(login(current).credentials.httpCustomAuth.name, 'Fresh preserved API reference');
+    assert.equal(transport(current).credentials.discordWebhookApi.name, 'Fresh preserved Discord reference');
+  }
+  for (const workflow of unrelated) assert.deepEqual(f.state.workflows.get(workflow.id), workflow);
+  const backup = path.join(f.local, 'n8n-backups', readdirSync(path.join(f.local, 'n8n-backups'))[0]);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(backup, 'previous-workflows.json'), 'utf8')), original);
+  assert.equal(JSON.parse(readFileSync(path.join(backup, 'quiesced-workflows.json'), 'utf8')).length, 9);
+});
+
+test('unreviewed settings, pinned inputs and changed Discord bindings fail before the first import', async (t) => {
+  for (const mutate of [
+    (workflow) => { workflow.settings.timezone = 'UTC'; },
+    (workflow) => { workflow.settings.availableInMCP = true; },
+    (workflow) => { workflow.settings.unreviewedExecutionOption = true; },
+    (workflow) => { workflow.pinData = { Settings: [{ json: { enabled: true } }] }; },
+    (workflow) => { transport(workflow).credentials.discordWebhookApi.id = 'DifferentDestination'; },
+    (workflow) => { delete login(workflow).credentials; },
+  ]) {
+    const f = fixture(t);
+    // Arriving during drain must be revalidated, not overwritten by the initial snapshot.
+    f.state.afterQuiesce = () => mutate(f.state.workflows.get('StockFlowDigest01'));
+    await assert.rejects(updateLocal(f.options), /settings differ|pinned data|bindings differ|API login binding/);
+    assert.equal(imports(f.state).length, 0);
+    assert.equal(JSON.parse(readFileSync(f.statusPath, 'utf8')).maintenanceState, 'paused-after-failure');
+  }
+});
+
+test('a quiesce failure cannot retain an earlier enabled status or disclose private errors', async (t) => {
+  const f = fixture(t); f.state.quiesceError = true;
+  writeFileSync(f.statusPath, JSON.stringify({ enabledWorkflows: ['StockFlowCritical01'], deliveryVerified: true }));
+  await assert.rejects(updateLocal(f.options), (error) => /state is unverified/.test(error.message) && !error.message.includes(privateDetail));
+  const status = JSON.parse(readFileSync(f.statusPath, 'utf8'));
+  assert.equal(status.maintenanceState, 'failed-unverified'); assert.equal(status.enabledWorkflows, null); assert.equal(status.deliveryVerified, false);
+  assert.equal(imports(f.state).length, 0);
+});
+
+test('post-restart stored-state corruption or activation failures pause all five instead of claiming completion', async (t) => {
+  for (const mode of ['stored-state', 'activation']) {
+    const f = fixture(t); f.confirm();
+    if (mode === 'activation') f.state.activeError = true;
+    else {
+      const original = f.options.fetchImpl;
+      f.options.fetchImpl = async (...args) => {
+        const response = await original(...args);
+        f.state.workflows.get('StockFlowCritical01').staticData = null;
+        return response;
+      };
+    }
+    await assert.rejects(updateLocal({ ...f.options, args: ['--apply', '--enable-low-stock'] }));
+    const status = JSON.parse(readFileSync(f.statusPath, 'utf8'));
+    assert.equal(status.maintenanceState, 'paused-after-failure'); assert.equal(status.schedulesPaused, true);
+    assert.deepEqual(status.enabledWorkflows, []); assert.equal(status.deliveryVerified, false);
+    assert.equal(f.state.maintenanceCalls.filter((call) => call === 'quiesce').length, 2);
+    assert.ok(Object.keys(WORKFLOW_MODES).every((id) => f.state.workflows.get(id).active === false));
   }
 });
