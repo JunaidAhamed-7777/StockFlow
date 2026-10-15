@@ -1,158 +1,212 @@
-web application/stitch/projects/12804117146067154911/screens/9a71a5da7ede4487875dcde84369331b
-# StockFlow Enterprise — Comprehensive Design System Specification (`design.md`)
-
-## 1. Overview & Brand Identity
-
-**Product Name:** StockFlow Enterprise  
-**Archetype:** B2B Mission-Critical SaaS / Logistics, Inventory & Stock Orchestration Engine  
-**Aesthetic:** Functionalist, ultra-clean, high-density, zero-fluff data architecture. Built for operations admins, plant procurement officers, and Tier-1 hardware suppliers.  
-**Target Viewport:** Desktop (1440px+ optimized layout, collapsible sidebar, fluid responsive grid).  
-**Core Principles:**
-- **Scannability First:** Tabular numerals, monospaced SKUs/coordinates, strict semantic badge styling, and 40–44px row heights.
-- **Single Accent Discipline:** Controlled Royal Navy / Electric Cobalt (`#2563EB`) reserved strictly for primary actions, active navigational states, and focus indicators.
-- **Subtle Elevation:** Rely on 1px crisp hairline borders (`#E2E8F0`) and ambient micro-shadows rather than heavy cards, gradients, or blur effects.
-- **Tri-Role Cohesion & Seamless Transition:** Unified visual grammar across Admin, Supplier, and Customer portals with role-switcher context and synchronized cross-portal data telemetry.
-
+---
+version: alpha
+name: StockFlow
+description: Inventory operations with a shared slate and cobalt visual system for administrators, suppliers, and customers.
+colors:
+  canvas: "#F8FAFC"
+  panel: "#FFFFFF"
+  subtle: "#F1F5F9"
+  border: "#E2E8F0"
+  border-strong: "#CBD5E1"
+  ink: "#0F172A"
+  text-secondary: "#475569"
+  muted: "#64748B"
+  primary: "#2563EB"
+  cobalt-hover: "#1D4ED8"
+  selected: "#EFF6FF"
+  selected-text: "#1E40AF"
+  danger: "#B91C1C"
+  danger-surface: "#FEF2F2"
+  danger-text: "#991B1B"
+  warning-surface: "#FFFBEB"
+  warning-text: "#92400E"
+  success-surface: "#ECFDF5"
+  success-text: "#065F46"
+typography:
+  sans:
+    fontFamily: '"Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    fontSize: "14px"
+    lineHeight: "1.5"
+  mono:
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+    fontSize: "12px"
+    lineHeight: "1.5"
+rounded:
+  DEFAULT: "0.25rem"
+  lg: "0.375rem"
+  xl: "0.5rem"
+  full: "9999px"
+spacing:
+  xs: "0.25rem"
+  sm: "0.5rem"
+  md: "0.75rem"
+  base: "1rem"
+  lg: "1.25rem"
+  xl: "1.5rem"
+  2xl: "2rem"
+  header: "3.5rem"
+  sidebar: "15rem"
+  dense-row: "2.5rem"
+  default-row: "2.75rem"
+components:
+  page:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.sans}"
+  button:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.panel}"
+    rounded: "{rounded.lg}"
+  button-hover:
+    backgroundColor: "{colors.cobalt-hover}"
+  card:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+  field:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.ink}"
+  field-disabled:
+    backgroundColor: "{colors.subtle}"
+    textColor: "{colors.text-secondary}"
+  table:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.ink}"
+  table-header:
+    backgroundColor: "{colors.subtle}"
+    textColor: "{colors.text-secondary}"
+  metadata:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.muted}"
+  dialog:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+  navigation-selected:
+    backgroundColor: "{colors.selected}"
+    textColor: "{colors.selected-text}"
+  button-danger:
+    backgroundColor: "{colors.danger}"
+    textColor: "{colors.panel}"
+  status-danger:
+    backgroundColor: "{colors.danger-surface}"
+    textColor: "{colors.danger-text}"
+  status-warning:
+    backgroundColor: "{colors.warning-surface}"
+    textColor: "{colors.warning-text}"
+  status-success:
+    backgroundColor: "{colors.success-surface}"
+    textColor: "{colors.success-text}"
 ---
 
-## 2. Portal Taxonomy & Information Architecture
+# StockFlow design system
 
-### 2.1 Admin Portal (Global Operations & Governance)
-- **Executive Command Center:** Global inventory valuation, DC capacity saturation, high-priority exception triage, and master SKU table.
-- **Stock Transactions & Audit Ledger:** Cryptographic audit trail of stock movements, receipts, dispatches, cycle count adjustments, and Merkle root consensus.
-- **Inventory & Multi-DC Allocations:** Real-time cross-facility stock allocation, safety floors, burn velocity, and automated rebalancing recommendations.
-- **AI Forecasting & Stockout Hub:** Autonomous depletion predictions, 30-day Bayesian projection curves, and ARE replenishment guardrails.
-- **Profile & RBAC Management:** User credentials, YubiKey hardware 2FA, granular permission matrix, and active session telemetry.
+## Overview
 
-### 2.2 Supplier Portal (Precision Components Global)
-- **Supplier Operations Dashboard:** Open PO fulfillment, on-time delivery (OTIF), ASN pipeline, and dock appointment scheduling.
-- **Supplied Products Catalog:** Manufacturer part numbers, volume tier pricing, stock buffers, and RoHS/AEC-Q100 compliance badges.
-- **Add & Edit Product Specification:** Tabbed enterprise form for hardware specifications, lead times, tiered pricing matrix, and X12 EDI 832 validation.
-- **Purchase Orders & ASN Fulfillment:** Incoming order processing, dock arrival SLAs, freight BOL generation, and AS2 telemetry.
-- **Inbound Stock Management:** Multi-DC buffer health, regional burn rates, and automated EDI 855 replenishment triggers.
+StockFlow is an inventory workspace for people managing products, stock adjustments, and orders. Its visual reference is an operations ledger: readable identifiers, aligned quantities, explicit status, and actions next to the records they affect. This is an operating application; task clarity and consistency lead.
 
-### 2.3 Customer Portal (Apex Manufacturing Corp)
-- **Customer Procurement Dashboard:** Net-30 available credit line ($184.5k/$250k), active wholesale orders, 30-day spend, and live carrier GPS tracking.
-- **Contracted Product Catalog:** Search and multi-filter toolbar, category presets, contracted vs. MSRP pricing, and bulk selection drawer.
-- **Product Details & Volume Tiers:** Engineering pinout diagrams, B2B price break matrix, warehouse availability, and BOM complementary pairing.
-- **Wholesale Cart & Dispatch Checkout:** Single-node freight consolidation calculator, pallet counts, job site delivery routing, and Net-30 PO approval.
-- **Customer Orders & Dispatch Tracking:** Filterable shipment table, freight tracking, waypoint route map, and trailer temperature telemetry.
+The established identity is preserved: Hanken Grotesk, slate surfaces, cobalt actions, compact tables, and crisp borders. The recognizable detail is the combination of monospaced SKUs and aligned tabular quantities. It does not need decorative charts, simulated telemetry, a marketing hero inside a workspace, or repeated feature badges.
 
-### 2.4 Authentication & Identity Suite
-- **Enterprise Split-Screen Login:** Side-by-side layout with high-impact brand/metrics hero, Okta/SAML SSO, role quick-switch, and FIDO2 MFA.
-- **Organization & DC Registration:** 4-step onboarding wizard for corporate entity registration, warehouse node setup, and EDI protocol config.
-- **User Profile & RBAC Security:** Superuser profile, granular permission matrix, hardware security key management, and cross-terminal session control.
+### Product scope and reference boundary
 
----
+`client/` is the production frontend. `stitch_stockflow_enterprise_inventory_saas/` contains visual references; its text and illustrated capabilities are not an API specification. The application currently supports:
 
-## 3. Color Palette & Token System
+- Customers: product discovery and details, stock-aware cart, order placement/history, and name/email profile editing.
+- Suppliers: owned-product management, stock adjustments, relevant customer orders, and profile editing. A linked supplier record is required for owned operations.
+- Administrators: inventory, product ownership, suppliers, customers derived from order history, orders, and profile editing.
+- Local n8n: documented notification workflows. Actual activation, credentials, delivery destination, and execution results belong to n8n and the private local configuration.
 
-### 3.1 Neutral Surfaces & Backgrounds
-| Token Name | Hex Value | Tailwind Class / Usage |
-| :--- | :--- | :--- |
-| `surface-canvas` | `#F8FAFC` | `bg-slate-50` — Global dashboard background |
-| `surface-card` | `#FFFFFF` | `bg-white` — Data containers, modal backdrops, table bodies |
-| `surface-subtle` | `#F1F5F9` | `bg-slate-100` — Table headers, disabled states, stat card wells |
-| `surface-hover` | `#F8FAFC` | `hover:bg-slate-50` — Table row hover, menu item hover |
-| `surface-active` | `#E2E8F0` | `bg-slate-200` — Active segmented button background |
+The existing stock-history and forecasting API routes return HTTP 501. The interface must explain unavailable capabilities without displaying invented records or predictions. The administrator's automation page describes separate n8n account-review agents. They are bound to fixed operator-selected StockFlow accounts; they do not inherit the identity currently signed in to the frontend. Working agent configuration does not implement demand forecasting.
 
-### 3.2 Neutral Borders & Dividers
-| Token Name | Hex Value | Usage |
-| :--- | :--- | :--- |
-| `border-default` | `#E2E8F0` | `border-slate-200` — Standard card borders, table dividers |
-| `border-subtle` | `#F1F5F9` | `border-slate-100` — Subtle inner dividers |
-| `border-strong` | `#CBD5E1` | `border-slate-300` — Input outlines, active dropdown triggers |
+Multi-warehouse allocations, EDI, carrier tracking, trade credit, tax/freight calculations, cryptographic ledgers, SSO, MFA, role administration, and session revocation are not implemented capabilities. Their appearance in earlier Stitch references does not authorize corresponding controls or claims. See [frontend capabilities and backend limits](docs/FRONTEND-LIMITATIONS.md).
 
-### 3.3 Typography & Text Content
-| Token Name | Hex Value | Usage |
-| :--- | :--- | :--- |
-| `text-primary` | `#0F172A` | `text-slate-900` — Headings, key figures, table headers |
-| `text-secondary` | `#475569` | `text-slate-600` — Data row values, descriptions, metadata |
-| `text-muted` | `#64748B` | `text-slate-500` — Subtitles, helper text, breadcrumbs |
-| `text-subtle` | `#94A3B8` | `text-slate-400` — Icon strokes, placeholder text, timestamps |
+The interface is English. Existing monetary formatting is USD with `en-US` formatting; the business market is not inferred from that choice. Operational use is primarily desktop with a functional narrow-screen layout. Japanese locale or market support is not currently specified.
 
-### 3.4 Primary Accent (Brand)
-| Token Name | Hex Value | Usage |
-| :--- | :--- | :--- |
-| `primary-50` | `#EFF6FF` | Soft active background, selected table rows |
-| `primary-100` | `#DBEAFE` | Soft badge background, focused input glow |
-| `primary-500` | `#3B82F6` | Secondary accent, link underlines, progress indicators |
-| `primary-600` | `#2563EB` | **Primary Brand Color** — Main CTA buttons, active tab indicators |
-| `primary-700` | `#1D4ED8` | Primary button hover state |
-| `primary-900` | `#1E3A8A` | High-contrast brand elements |
+### Token ownership and runtime mapping
 
-### 3.5 Semantic Status & Telemetry Tokens
-| Status | Background (`bg-*`) | Border (`border-*`) | Text (`text-*`) | Meaning / Application |
-| :--- | :--- | :--- | :--- | :--- |
-| **Success** | `#ECFDF5` (`emerald-50`) | `#A7F3D0` (`emerald-200`) | `#065F46` (`emerald-800`) | In Stock (>80%), Fulfilled, Delivered, AS2 Connected |
-| **Warning** | `#FFFBEB` (`amber-50`) | `#FDE68A` (`amber-200`) | `#92400E` (`amber-800`) | Low Stock Warning, Pending Approval, In Production |
-| **Danger** | `#FEF2F2` (`red-50`) | `#FECACA` (`red-200`) | `#991B1B` (`red-800`) | Out of Stock / Stockout, High Density (>85%), SLA Breach |
-| **Info / Neutral** | `#EFF6FF` (`blue-50`) | `#BFDBFE` (`blue-200`) | `#1E40AF` (`blue-800`) | In Transit, Dispatched, EDI Synced |
-| **Draft / Inactive** | `#F1F5F9` (`slate-100`) | `#CBD5E1` (`slate-300`) | `#475569` (`slate-600`) | Draft, Canceled, Offline Telemetry |
+The existing runtime tokens remain the executable source, following ownership model B. This document records accepted values and visual intent; it does not generate a second theme. Tailwind v4 loads the established JavaScript adapter through `@config` in `client/src/index.css`.
 
----
+| Design role | Runtime owner/alias | Shared consumers |
+|---|---|---|
+| Canvas, white panel, subtle well | `client/tailwind.config.js`: `surface`, `surface-container-lowest`, `surface-container-low` | AppShell, Card, fields, tables |
+| Ink and secondary text | `on-surface`, `on-surface-variant`, `outline` | PageHeader, Table, fields |
+| Cobalt action and focus | `secondary`, `secondary-container`; base focus rule in `client/src/index.css` | Button, links, active navigation, focus |
+| Selected surface and text | `primary-container`, `on-primary-container` | Sidebar, selected context |
+| Dark action | `primary`, `on-primary` | Existing Button `dark` variant |
+| Danger | `error`, `error-container`, `on-error-container` | Button, ErrorState, Badge, field errors |
+| Success/warning | Tailwind emerald/amber palette used by `components/ui/Badge.jsx` | Text-and-color status badges |
+| Type, radius, spacing, geometry | `fontFamily`, `fontSize`, `borderRadius`, `spacing` in `client/tailwind.config.js` | Shared primitives and layout |
+| Scrollbar states | `--scrollbar-thumb`, `--scrollbar-track`, `--scrollbar-hover`, `--scrollbar-active` in `client/src/index.css` | Every document-owned overflow region |
 
-## 4. Typography Hierarchy
+The structured design token `colors.primary` means the cobalt brand action. The legacy runtime alias `primary` means dark ink; runtime `secondary` means cobalt. The mapping above is intentional: preserve those executable meanings instead of renaming every consumer. New components consume existing semantic aliases. Durable token changes require this document and the owning runtime adapter to change together. Do not copy values into another theme object. Border values remain documented tokens even though the alpha component-token format has no border-color property.
 
-- **Primary Font Family:** `Hanken Grotesk`, `-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `Roboto`, `sans-serif`
-- **Monospace Family (Data/SKUs):** `ui-monospace`, `SFMono-Regular`, `Menlo`, `Monaco`, `Consolas`, `monospace`
+## Colors
 
-| Level | Size | Weight | Line Height | Tracking | Application |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Display / Page Title** | 24px (`text-2xl`) | 700 (`font-bold`) | 1.25 | `-0.02em` | Main dashboard & portal headers |
-| **Section Title (H2)** | 18px (`text-lg`) | 600 (`font-semibold`) | 1.35 | `-0.01em` | Card titles, matrix headers, table titles |
-| **Subhead / Metric Title** | 12px (`text-xs`) | 600 (`font-semibold`) | 1.4 | `+0.05em` | All-caps metric titles (`tracking-wider`) |
-| **KPI Big Numbers** | 32px (`text-3xl`) | 700 (`font-bold`) | 1.1 | `-0.02em` | Currency values, total order counts |
-| **Body (Standard)** | 14px (`text-sm`) | 400 (`font-normal`) | 1.5 | `0` | Standard table cell data, form labels |
-| **Body Semibold** | 14px (`text-sm`) | 600 (`font-semibold`) | 1.5 | `0` | Key cell descriptors, PO numbers, user names |
-| **Caption / Helper** | 12px (`text-xs`) | 400 (`font-normal`) | 1.4 | `0` | Sub-labels, sync stamps, warehouse rack tags |
-| **Code / Data Coordinates** | 12px (`text-xs`) | 500 (`font-medium`) | 1.2 | `0` | SKUs (`SKU-9932-SN`), Bin codes (`Aisle 4 • Bin B2-11`) |
+Use canvas for page background, white for data panels, and subtle slate for table headers and control wells. Borders define grouping. Cobalt is reserved for primary actions, active navigation, links, and keyboard focus. It is not a decoration on every icon or caption.
 
----
+Status needs text in addition to color: success for available/completed states, warning for low stock or attention, danger for out of stock or destructive consequences, and neutral for inactive context. Inventory quantity and each product's recorded threshold determine stock status; a badge must not imply a forecast.
 
-## 5. Spacing, Elevation & Layout Grid
+Light is the supported theme. Do not present a theme switch without a complete alternative. High-contrast and forced-colors modes must retain visible controls, focus, and usable scrollbars.
 
-### 5.1 Spacing Scale (8pt Grid System)
-- `2xs` = 2px (`p-0.5` / `gap-0.5`)
-- `xs` = 4px (`p-1` / `gap-1`)
-- `sm` = 8px (`p-2` / `gap-2`)
-- `md` = 12px (`p-3` / `gap-3`)
-- `base` = 16px (`p-4` / `gap-4`)
-- `lg` = 20px (`p-5` / `gap-5`)
-- `xl` = 24px (`p-6` / `gap-6`)
-- `2xl` = 32px (`p-8` / `gap-8`)
+## Typography
 
-### 5.2 Border Radius
-- **Micro (Inputs, Badges, Table Buttons):** `rounded` (4px / 0.25rem)
-- **Cards & Containers:** `rounded-lg` (6px to 8px / 0.5rem)
-- **Pills / Status Dots:** `rounded-full` (9999px)
+Use Hanken Grotesk for headings, body, controls, and tables, with the system stack in the token above. Use the monospaced stack only for SKUs, record identifiers, and technical values. Quantities and money use tabular figures and right alignment when compared in columns.
 
-### 5.3 Shadows (Elevation)
-- **Card Flat (Default):** `shadow-none` with `border border-slate-200`
-- **Interactive Hover:** `shadow-sm` (`0 1px 2px 0 rgb(0 0 0 / 0.05)`)
-- **Dropdowns & Popovers:** `shadow-md` (`0 4px 6px -1px rgb(0 0 0 / 0.1)`)
-- **Modals & Flyouts:** `shadow-xl` (`0 20px 25px -5px rgb(0 0 0 / 0.1)`)
+- Page heading: 24px, weight 700, 32px line height.
+- Section heading: 16–18px, weight 600, 24–26px line height.
+- Body and controls: 14px, 21–22px line height.
+- Labels and metadata: 12px, 18px line height.
+- Principal metric: approximately 30–32px, weight 700; use only for meaningful recorded measures.
 
----
+Use sentence case for labels and actions. Reserve uppercase tracking for short navigation group labels or compact column headers where it helps scanning. Do not apply it to ordinary help, loading messages, or paragraphs. Keep descriptive copy to a readable measure. Do not introduce a display font into application controls.
 
-## 6. Component Patterns & Anatomy
+## Layout
 
-### 6.1 App Shell Frames
-- **Persistent Header:** 56px height, white background, 1px border-b, facility dropdown selector, omnisearch `⌘K`, notification bell with count badge, and user avatar.
-- **Collapsible Sidebar:** 240px width (expandable/collapsible to 64px rail), role switch dropdown, categorised nav sections (`CORE`, `PROCUREMENT & SUPPLY`, `SALES & FULFILLMENT`, `SYSTEM & GOVERNANCE`), and real-time sync telemetry footer (`14ms Sync`).
+Use the existing 4px-based spacing vocabulary: 4, 8, 12, 16, 20, 24, and 32px. The header is 56px; desktop navigation is 240px with a 64px collapsed rail. The navigation becomes a modal drawer below 1024px. The content shell remains fluid with the established 1600px maximum.
 
-### 6.2 High-Density Data Tables
-- Row height: 40px to 44px.
-- Table header: `bg-slate-50`, uppercase 12px tracking-wider, border-b border-slate-200.
-- Data cells: Tabular figures for quantities, monospaced codes for SKUs and serials, status badges with color-coded dot indicator, right-aligned monetary values.
-- Bulk Drawer: Sticky floating tray at bottom on multi-row checkbox selection.
+Page headings describe the current job and place relevant actions at the same level. Data lives in bordered panels; avoid nesting a heading card, toolbar card, and additional ornamental cards when one grouped panel communicates the task. Keep related filters near their results.
 
-### 6.3 Form Architecture & Inputs
-- Standard input height: 36px (`h-9`), crisp border (`border-slate-300`), focus ring (`focus:border-blue-600 focus:ring-1 focus:ring-blue-600`).
-- Multi-Step Stepper: Horizontal flow bar with step numbers, titles, and active indicator.
-- Spec Matrix: Structured two-column key-value grids with monospace values and unit selectors.
+Comparison tables retain native table semantics and horizontal overflow on narrow screens. A table panel may own scrolling; do not give the shared page shell a fixed viewport height to force a table to fit. Forms retain natural document flow. Preserve every action and readable status on mobile.
 
-### 6.4 Telemetry & Edge Resilience States
-- **Live Sync Indicator:** Pulsing green indicator dot + latency display (`14ms Sync • SAP S/4HANA`).
-- **Cryptographic Audit Hash:** Merkle root hash verification bar with consensus node checkmarks.
-- **Offline / Degraded Banner:** High-visibility amber/red banner indicating pending local cache reconciliation.
+Reserve image dimensions, loading regions, inline help, and button geometry. Scrollbar gutters and overlay scroll locking must not shift the page. Important focused controls must remain visible below the fixed header and above any sticky actions.
+
+## Elevation & Depth
+
+Borders and tonal surfaces supply the default hierarchy. Shared Card and StatCard are flat, and PageHeader sits directly in the page flow. Keep moderate elevation for account popovers and strong elevation for modal surfaces. Do not add blurred blobs, glow effects, or gradients to operating screens.
+
+## Shapes
+
+The existing radius scale is 4px for small controls, 6px for standard controls, and 8px for larger panels. Fully rounded shapes are limited to avatars and meaningful compact status elements. Icons do not each require a colored tile. Use one-pixel borders except for clear focus or selected treatment.
+
+## Components
+
+`client/src/components/ui/` owns Button, Card, Input/Select/Textarea, Table, Badge, Modal, loading, and empty/error states. Reuse these primitives. Interaction, navigation, validation, and recovery rules are recorded in [UX-CONTRACT.md](UX-CONTRACT.md).
+
+Buttons have one clear primary action per decision area. Secondary actions use outline or quiet treatment. Destructive row actions remain visually separated from ordinary edits; the final irreversible confirmation may use solid danger. A busy button preserves its dimensions, exposes pending state, and blocks duplicate activation.
+
+Tables use 40px headers and approximately 44px rows. Header text uses secondary text on the subtle surface for normal-text contrast. Long values may grow rows instead of overlapping adjacent columns. Use text plus semantic badges, readable column labels, and actual links/buttons for navigable records. Table row-click enhancement has a separate native View button; a focusable table row is not the only action. Empty, no-results, loading, and error states are useful product states and must remain.
+
+Forms use the shared field primitives with visible labels and associated help/errors. Native Select is the accepted platform-owned popup; do not imply its opened geometry is authored. Error text explains the correction. PasswordInput owns masked-by-default fields and their Show/Hide control. Textarea has five initial rows and a 136px minimum with resize-none; longer content remains scrollable without disrupting adjacent controls.
+
+Material Symbols Outlined is the existing icon family. Standard controls use 16–20px icons; larger empty-state icons are permitted. Decorative icons are hidden from assistive technology; icon-only actions need names. Prefer a nearby label over a novel symbol.
+
+Motion communicates opening, loading, or a state change. Keep routine transitions short and interruptible. Do not pulse a generic “live” dot independently of a verified state. The unlayered reduced-motion rules in index.css stop continuous spinner/pulse/ping animations while preserving status text and useful color feedback.
+
+Global scrollbars use a slate thumb on the subtle surface, with darker hover/active states. The baseline applies to new overflow regions automatically and resets to system colors in forced-colors mode. Root scrollbar gutter and scroll padding keep navigation and focus stable. The Hanken font request includes the used 400–700 weights; unused font families are not loaded.
+
+Product copy names the job: “Products”, “Orders”, “Stock”, “Create product”, and “Save changes”. Avoid invented operational jargon, repeated claims of intelligence, feature marketing, or internal setup instructions in a customer's purchasing flow. Keep technical configuration in the administrator's relevant integration context or documentation.
+
+Free illustrative product photographs are presentation metadata mapped by SKU, not proof of a specific manufactured item. Preserve their honest caption/credit and an accessible missing-image state. The earlier requested demonstration records are real local catalog records; this polish does not silently delete them.
+
+## Do's and Don'ts
+
+- **Do:** let identifiers, quantities, ownership, and the next action carry the layout.
+- **Do:** distinguish recorded facts, generated advice, configuration documentation, and verified live state.
+- **Do:** preserve shared loading, error, empty, and no-results recovery across roles.
+- **Don't:** display invented forecasts, percentage gains, carrier events, financial terms, or activation status.
+- **Don't:** use fake role selectors, inert controls, perpetual status decoration, or unsupported security claims.
+- **Don't:** remove legitimate field examples, honest unavailable states, or image attribution under a blanket “placeholder” cleanup.
+
+### Reconciliation recorded on 15 October 2026
+
+The previous document copied the Stitch concept's capability taxonomy. This revision preserves its slate/cobalt palette, Hanken typography, compact geometry, and restrained elevation while replacing aspirational capability claims with the verified API scope. Shared surface, contrast, font-loading, search, and motion changes now implement that direction in source. Runtime and browser verification of the complete rollout remain separate evidence in UX-CONTRACT.md.

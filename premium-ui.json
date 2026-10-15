@@ -1,0 +1,31 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["client/src"],
+  "locale": "en-US",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Select/Listbox", "Date", "Form", "Scrollbar", "CRUD"],
+  "ownership": {
+    "Select/Listbox": "native",
+    "Date": "typed"
+  },
+  "requiredCommands": ["typecheck", "lint", "unit", "build"],
+  "commands": {
+    "typecheck": "npm run typecheck",
+    "lint": "npm run lint --workspace client",
+    "unit": "npm test --workspace client",
+    "build": "npm run build"
+  },
+  "evidence": {
+    "failurePaths": "client/tests/auth-session.test.mjs"
+  },
+  "verificationStatus": {
+    "runtime": "Not established by this manifest; commands must be executed separately.",
+    "browserCrud": "Pending current implementation and browser verification.",
+    "formAdapter": "client/src/utils/formValidation.ts",
+    "paginator": "client/src/components/ui/Pagination.jsx",
+    "listState": "client/src/hooks/useListState.js",
+    "unsavedGuard": "client/src/hooks/useUnsavedChanges.ts",
+    "router": "client/src/main.jsx",
+    "operationalPageRollout": "In progress; final integrated runtime and browser verification pending."
+  }
+}
