@@ -133,6 +133,35 @@ test('unrelated ports and reused PIDs refuse before replacements or stopping any
   assert.equal(f.state.mutations.length, count); assert.equal(f.bytes(), before);
 });
 
+for (const port of [5173, 55432, 5678]) {
+  test(`unrelated port ${port} is refused without touching its service or attempting schema changes`, async (t) => {
+    const f = fixture(t); f.state.ports.set(port, [1234]);
+    await assert.rejects(f.runtime.execute('start'), new RegExp(`Port ${port}`));
+    assert.deepEqual(f.state.ports.get(port), [1234]);
+    assert.equal(f.state.mutations.some((entry) => entry.kind === 'kill' || entry.kind === 'launch'), false);
+    assert.equal(f.state.mutations.some((entry) => entry.command === 'fixture-node'), false);
+    assert.equal(f.state.containers.has('stockflow-db'), false); assert.equal(f.state.volume, null);
+    assert.equal(f.state.tables, 0); assert.equal(f.state.seedCount, 0);
+    // Database-port validation follows n8n setup; that separate container may
+    // already have been created, while the occupied service remains untouched.
+    if (port !== 55432) assert.deepEqual(f.state.mutations, []);
+    assert.equal(existsSync(f.runtime.lockPath), false); assert.equal(existsSync(`${f.runtime.lockPath}.guard`), false);
+  });
+}
+
+for (const resource of ['container', 'volume']) {
+  test(`an existing unowned database ${resource} without a runtime marker is preserved and not adopted`, async (t) => {
+    const f = fixture(t);
+    const existing = { Id: 'unowned-fixture-resource', Labels: { 'stockflow.owner': 'another-checkout' } };
+    if (resource === 'container') f.state.containers.set('stockflow-db', existing); else f.state.volume = existing;
+    await assert.rejects(f.runtime.execute('start'), /already exists without this checkout's runtime marker/);
+    assert.equal(existsSync(f.runtime.configPath), false);
+    assert.equal(resource === 'container' ? f.state.containers.get('stockflow-db') : f.state.volume, existing);
+    assert.deepEqual(f.state.mutations, []); assert.equal(f.state.seedCount, 0);
+    assert.equal(existsSync(f.runtime.lockPath), false); assert.equal(existsSync(`${f.runtime.lockPath}.guard`), false);
+  });
+}
+
 test('missing or replaced saved containers are preserved without automatic replacements', async (t) => {
   for (const name of ['stockflow-db', 'n8n']) for (const replaced of [false, true]) {
     const f = fixture(t); await f.runtime.execute('start');
@@ -153,6 +182,22 @@ test('Docker unavailable fails cleanly; stopped verified containers restart by s
   await f.runtime.execute('start');
   assert.deepEqual(f.state.mutations.slice(count).map((entry) => entry.args), [['start', before.n8nContainerId], ['start', before.containerId]]);
   assert.equal(f.state.seedCount, 1);
+});
+
+test('PostgreSQL never ready exhausts the bounded health wait before schema or app launch, then recovers safely', async (t) => {
+  const f = fixture(t); f.state.databaseUnready = true;
+  await assert.rejects(f.runtime.execute('start'), /Local PostgreSQL did not become ready/);
+  assert.equal(f.state.captures.filter((args) => args.includes('pg_isready')).length, 60);
+  assert.equal(f.state.captures.some((args) => args.includes('psql')), false);
+  assert.equal(f.state.mutations.some((entry) => entry.command === 'fixture-node' || entry.kind === 'launch'), false);
+  assert.equal(f.state.tables, 0); assert.equal(f.state.seedCount, 0);
+  const before = f.read(); assert.equal(before.initialized, false);
+  assert.equal(existsSync(f.runtime.lockPath), false); assert.equal(existsSync(`${f.runtime.lockPath}.guard`), false);
+  f.state.databaseUnready = false;
+  await f.runtime.execute('start');
+  for (const key of ['databaseUrl', 'jwtSecret', 'containerId', 'n8nContainerId']) assert.equal(f.read()[key], before[key]);
+  assert.equal(f.state.seedCount, 1);
+  assert.equal(f.state.mutations.filter((entry) => entry.args?.[0] === 'run').length, 2);
 });
 
 test('seed failure after schema push leaves initialized false and refuses a nonempty schema on retry', async (t) => {
