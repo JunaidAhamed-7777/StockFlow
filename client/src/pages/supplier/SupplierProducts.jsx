@@ -83,7 +83,7 @@ export function SupplierProducts() {
         actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new", { state: { returnTo } })} icon={<Icon name="add" size={16} />}>Create product</Button>}
       />
       <Card className="p-space-base">
-      <form onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }} className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search your products">
+      <form noValidate onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }} className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search your products">
         <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search name or SKU" label="Search products" />
         <Button type="submit" disabled={loading}>Search</Button>
       </form>

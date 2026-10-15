@@ -95,7 +95,7 @@ export function CustomerProducts() {
         actions={<Button variant="outline" onClick={() => navigate("/customer/cart")} icon={<Icon name="shopping_cart" size={18} />}>Cart ({count})</Button>}
       />
       <Card className="p-space-base">
-        <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-end" aria-label="Filter product catalog">
+        <form noValidate onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-end" aria-label="Filter product catalog">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Search products or SKU" />
           <Select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}>
             <option value="">All categories</option>

@@ -57,7 +57,7 @@ export function AdminSuppliers() {
         description="Find your suppliers, review their contact details, and see catalog coverage."
       />
       <Card className="p-space-base">
-        <form className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search suppliers" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
+        <form noValidate className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search suppliers" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
           <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search company, contact, or email" label="Search suppliers" />
           <Button type="submit">Search</Button>
         </form>

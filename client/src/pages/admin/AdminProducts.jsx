@@ -120,7 +120,7 @@ export function AdminProducts() {
         actions={<Button variant="dark" onClick={() => navigate("/admin/products/new", { state: { returnTo } })} icon={<Icon name="add" size={16} />}>Create product</Button>}
       />
       <Card className="p-space-base">
-      <form onSubmit={(event) => { event.preventDefault(); setFilters({ search, category, supplier, lowStock: lowStock ? "1" : "" }); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-center" aria-label="Filter products">
+      <form noValidate onSubmit={(event) => { event.preventDefault(); setFilters({ search, category, supplier, lowStock: lowStock ? "1" : "" }); }} className="flex flex-col xl:flex-row gap-space-sm xl:items-center" aria-label="Filter products">
         <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search name, SKU, description" label="Search products" />
         <Select aria-label="Filter by category" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">All categories</option>

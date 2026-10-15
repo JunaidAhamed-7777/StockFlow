@@ -138,7 +138,7 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
         description={description}
       />
       <Card className="p-space-base">
-      <form className="flex flex-col sm:flex-row gap-space-sm" aria-label="Filter orders" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
+      <form noValidate className="flex flex-col sm:flex-row gap-space-sm" aria-label="Filter orders" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
         <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Find an order or customer" label="Search orders" />
         <Select value={filters.status} aria-label="Filter orders by status" onChange={(event) => setFilters({ status: event.target.value })}>
           <option value="">All statuses</option>

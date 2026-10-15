@@ -58,7 +58,7 @@ export function CustomerOrders() {
         description="Review your purchase history and the latest fulfillment status."
       />
       <Card className="p-space-base">
-        <form className="flex flex-col sm:flex-row gap-space-sm" aria-label="Filter your orders" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
+        <form noValidate className="flex flex-col sm:flex-row gap-space-sm" aria-label="Filter your orders" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
           <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Find an order number" label="Search orders" />
           <Select value={filters.status} aria-label="Filter orders by status" onChange={(event) => setFilters({ status: event.target.value })}>
             <option value="">All statuses</option>

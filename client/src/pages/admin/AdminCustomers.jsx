@@ -84,7 +84,7 @@ export function AdminCustomers() {
         <StatCard label="Customers with orders" value={customers.length} hint="Customers with recorded purchases" icon="receipt_long" />
       </section>
       <Card className="p-space-base">
-        <form className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search customers" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
+        <form noValidate className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search customers" onSubmit={(event) => { event.preventDefault(); setFilters({ search }); }}>
           <ToolbarSearch value={search} onChange={setSearch} onClear={() => setFilters({ search: "" })} placeholder="Search name or email" label="Search customers" />
           <Button type="submit">Search</Button>
         </form>
