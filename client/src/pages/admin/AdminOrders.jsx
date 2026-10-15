@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useListFilters, usePaginatedRows } from "../../hooks/useListState";
+import { useListFilters } from "../../hooks/useListState";
+import { useRemotePagination } from "../../hooks/useRemotePagination";
 import { paginateRows } from "../../utils/listState.mjs";
 import { Pagination } from "../../components/ui/Pagination";
-import { getOrder, listOrders, updateOrderStatus } from "../../services/order.service";
+import { getOrder, listOrderPage, updateOrderStatus } from "../../services/order.service";
 import { useAuth } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errors";
 import { formatCurrency, formatDate } from "../../utils/format";
@@ -28,7 +29,7 @@ const NEXT_STATUSES = {
 
 export function OrdersPage({ title, description, canUpdateStatus }) {
   const { role, supplier } = useAuth();
-  const [orders, setOrders] = useState([]);
+  const [orderPage, setOrderPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
@@ -40,12 +41,16 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
   const { filters, setFilters } = useListFilters({ search: "", status: "" });
   const [search, setSearch] = useState(filters.search);
   const [linePage, setLinePage] = useState(1);
+  const [loadedRequestKey, setLoadedRequestKey] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const requestId = useRef(0);
   const listRequestId = useRef(0);
+  const requestController = useRef(null);
   const isSupplier = role === "SUPPLIER";
-  const query = filters.search.toLowerCase();
-  const filteredOrders = orders.filter((order) => (!filters.status || order.status === filters.status) && (!query || `${order.id} ${order.customer?.name || ""} ${order.customer?.email || ""}`.toLowerCase().includes(query)));
-  const pagination = usePaginatedRows(filteredOrders, { ready: !loading && !error });
+  const pagination = useRemotePagination(orderPage, { filters: { ...filters, role, supplierId: supplier?.id || "" }, loadedRequestKey, ready: !loading && !error });
+  const { requestedPage, requestKey } = pagination;
+  const busy = loading || (!error && !pagination.ready);
+  const hasFilters = Boolean(filters.search || filters.status);
   const linePagination = paginateRows(visibleItems(detail || {}), linePage);
 
   useEffect(() => { setSearch(filters.search); }, [filters.search]);
@@ -60,27 +65,40 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
   }
 
   function canChangeOrder(order) {
-    return canUpdateStatus && (!isSupplier || (order?.orderItems?.length > 0 && order.orderItems.every((item) => Number(item.product?.supplierId) === Number(supplier?.id))));
+    return canUpdateStatus && (!isSupplier || (order?.hasOtherSuppliers === false && supplier?.id && order?.orderItems?.length > 0 && order.orderItems.every((item) => Number(item.product?.supplierId) === Number(supplier.id))));
   }
 
   async function load() {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     const activeRequest = ++listRequestId.current;
+    if (isSupplier && !supplier?.id) {
+      setOrderPage(null);
+      setLoading(false);
+      setError("No supplier profile is linked to this account, so supplied orders cannot be loaded.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const rows = await listOrders();
-      if (activeRequest === listRequestId.current) setOrders(rows);
+      const result = await listOrderPage({ page: requestedPage, pageSize: 20, search: filters.search || undefined, status: filters.status || undefined }, { signal: controller.signal });
+      if (activeRequest !== listRequestId.current || controller.signal.aborted) return;
+      setOrderPage(result);
+      setLoadedRequestKey(requestKey);
     } catch (err) {
-      if (activeRequest === listRequestId.current) setError(getErrorMessage(err));
+      if (activeRequest === listRequestId.current && !controller.signal.aborted) setError(getErrorMessage(err));
     } finally {
-      if (activeRequest === listRequestId.current) setLoading(false);
+      if (activeRequest === listRequestId.current && !controller.signal.aborted) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
-    return () => { requestId.current += 1; listRequestId.current += 1; };
-  }, []);
+    return () => { listRequestId.current += 1; requestController.current?.abort(); };
+  }, [requestKey, refreshKey]);
+
+  useEffect(() => () => { requestId.current += 1; }, []);
 
   async function openOrder(row) {
     const activeRequest = ++requestId.current;
@@ -110,24 +128,32 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
 
   async function saveStatus() {
     if (saving || !detail || !canChangeOrder(detail) || !(NEXT_STATUSES[detail.status] || []).includes(status)) return;
+    const activeRequest = requestId.current;
+    const orderId = detail.id;
     setSaving(true);
     setDetailError("");
     setMessage("");
     try {
-      const updated = await updateOrderStatus(detail.id, status);
-      setDetail(updated);
-      setStatus(updated.status);
-      setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+      await updateOrderStatus(orderId, status);
+      setRefreshKey((value) => value + 1);
+      if (activeRequest !== requestId.current) return;
+      setDetail(null);
+      setStatus("");
       setMessage("Order status updated.");
+      try {
+        const updated = await getOrder(orderId);
+        if (activeRequest !== requestId.current) return;
+        setDetail(updated);
+        setStatus(updated.status);
+      } catch {
+        if (activeRequest === requestId.current) setDetailError("The status update succeeded, but order details could not be refreshed. Reload this order to review its latest status.");
+      }
     } catch (err) {
-      setDetailError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setDetailError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
   }
-
-  if (loading) return <PageSkeleton />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
 
   const nextStatuses = NEXT_STATUSES[detail?.status] || [];
 
@@ -144,25 +170,27 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
           <option value="">All statuses</option>
           {STATUSES.map((item) => <option key={item} value={item}>{item.charAt(0) + item.slice(1).toLowerCase()}</option>)}
         </Select>
-        <Button type="submit">Search</Button>
+        <Button type="submit" disabled={busy}>Search</Button>
       </form>
       </Card>
-      <Card>
+      {error ? <ErrorState message={error} onRetry={load} /> : null}
+      {busy ? <PageSkeleton /> : !error && <Card>
         <Table
           rows={pagination.rows}
           caption={isSupplier ? "Your supplied orders" : "Customer orders"}
-          empty={<EmptyState icon="receipt_long" title={orders.length ? "No matching orders" : "No orders yet"} description={orders.length ? "Try another search or status." : "Orders will appear here once a customer completes checkout."} />}
+          empty={<EmptyState icon="receipt_long" title={hasFilters ? "No matching orders" : "No orders yet"} description={hasFilters ? "Try another search or status." : "Orders will appear here once a customer completes checkout."} />}
           columns={[
             { key: "id", header: "Order", render: (row) => <span className="font-mono-data">#{row.id}</span> },
             { key: "customer", header: "Customer", render: (row) => row.customer?.name || row.customer?.email || "—" },
             { key: "createdAt", header: "Created", render: (row) => formatDate(row.createdAt) },
-            { key: "totalAmount", header: isSupplier ? "Your items" : "Total", align: "right", render: (row) => formatCurrency(orderAmount(row)) },
+            { key: "visibleLineCount", header: "Lines", align: "right" },
+            { key: "visibleAmount", header: isSupplier ? "Your items" : "Total", align: "right", render: (row) => formatCurrency(row.visibleAmount) },
             { key: "status", header: "Status", render: (row) => <OrderStatusBadge status={row.status} /> },
             { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View order ${row.id}`} onClick={(event) => { event.stopPropagation(); openOrder(row); }}>View</Button> },
           ]}
         />
         <Pagination {...pagination} onPageChange={pagination.setPage} label="Orders" />
-      </Card>
+      </Card>}
       <Modal
         open={Boolean(selected)}
         title={`Order #${selected?.id || ""}`}
@@ -175,7 +203,7 @@ export function OrdersPage({ title, description, canUpdateStatus }) {
             {nextStatuses.map((item) => <option key={item} value={item}>{item}</option>)}
           </Select>
           <Button loading={saving} disabled={status === detail.status} onClick={saveStatus}>Save status</Button>
-        </> : <Button variant="outline" onClick={closeOrder}>Close</Button>}
+        </> : <Button variant="outline" disabled={saving} onClick={closeOrder}>Close</Button>}
       >
         {detailError ? <ErrorState message={detailError} onRetry={!detail ? () => openOrder(selected) : undefined} /> : null}
         <p role="status" aria-live="polite" className="font-body-sm text-secondary">{message}</p>
