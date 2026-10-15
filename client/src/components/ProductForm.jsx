@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "./ui/Button";
 import { Input, Select, Textarea } from "./ui/Input";
 import { Card } from "./ui/Card";
@@ -97,11 +97,13 @@ export function ProductForm({ productId, cancelTo, successTo }) {
       description: form.description.trim(),
       sku: form.sku.trim(),
       price: Number(form.price),
-      quantity: Number(form.quantity),
       lowStockThreshold: Number(form.lowStockThreshold),
       categoryId: Number(form.categoryId),
     };
-    if (!payload.name || !payload.sku || !Number.isSafeInteger(payload.categoryId) || payload.categoryId < 1 || !Number.isFinite(payload.price) || payload.price < 0 || !Number.isSafeInteger(payload.quantity) || payload.quantity < 0 || payload.quantity > 2147483647 || !Number.isSafeInteger(payload.lowStockThreshold) || payload.lowStockThreshold < 0 || payload.lowStockThreshold > 2147483647 || form.price === "" || form.quantity === "" || form.lowStockThreshold === "") {
+    const initialQuantity = Number(form.quantity);
+    const validStock = isEdit || (form.quantity !== "" && Number.isSafeInteger(initialQuantity) && initialQuantity >= 0 && initialQuantity <= 2147483647);
+    if (!isEdit) payload.quantity = initialQuantity;
+    if (!payload.name || !payload.sku || !Number.isSafeInteger(payload.categoryId) || payload.categoryId < 1 || !Number.isFinite(payload.price) || payload.price < 0 || !validStock || !Number.isSafeInteger(payload.lowStockThreshold) || payload.lowStockThreshold < 0 || payload.lowStockThreshold > 2147483647 || form.price === "" || form.lowStockThreshold === "") {
       setError("Enter a name, SKU and category, a valid non-negative price, and non-negative whole numbers for stock and threshold.");
       setSaving(false);
       return;
@@ -186,7 +188,8 @@ export function ProductForm({ productId, cancelTo, successTo }) {
             <h2 className="font-headline-sm text-headline-sm">Pricing & Stock</h2>
           </div>
           <Input id="price" label="Unit price" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setField("price", e.target.value)} required />
-          <Input id="quantity" label="On-hand quantity" type="number" min="0" max="2147483647" step="1" value={form.quantity} onChange={(e) => setField("quantity", e.target.value)} required />
+          <Input id="quantity" label={isEdit ? "Stock when form opened" : "Initial quantity"} hint={isEdit ? "Reference only. Product edits do not change inventory." : "Opening stock for this new product."} readOnly={isEdit} type="number" min="0" max="2147483647" step="1" value={form.quantity} onChange={(e) => setField("quantity", e.target.value)} required={!isEdit} />
+          {isEdit ? <p className="font-caption text-on-surface-variant"><Link className="text-secondary underline underline-offset-2" to={role === "ADMIN" ? "/admin/inventory" : "/supplier/stock"}>Record a stock adjustment</Link> to receive or issue units with an audit reason.</p> : null}
           <Input id="lowStockThreshold" label="Low-stock threshold" hint="Flag this product when stock reaches this quantity or lower." type="number" min="0" max="2147483647" step="1" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value)} required />
           {role === "ADMIN" ? (
             <Select id="supplierId" label="Supplier" value={form.supplierId} onChange={(e) => setField("supplierId", e.target.value)} required>

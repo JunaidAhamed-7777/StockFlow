@@ -25,14 +25,14 @@ function toProductBody(payload) {
     name: String(payload.name || "").trim(),
     sku: String(payload.sku || "").trim(),
     price: Number(payload.price),
-    quantity: Number(payload.quantity),
     lowStockThreshold: Number(payload.lowStockThreshold),
     categoryId: toId(payload.categoryId),
   };
   if (!body.name || !body.sku || !Number.isFinite(body.price) || body.price < 0) {
     throw new Error("Provide a product name, SKU, and a valid non-negative price.");
   }
-  if ([body.quantity, body.lowStockThreshold].some((value) => !Number.isSafeInteger(value) || value < 0 || value > MAX_QUANTITY)) {
+  if (payload.quantity !== undefined) body.quantity = Number(payload.quantity);
+  if ([body.lowStockThreshold, ...(body.quantity === undefined ? [] : [body.quantity])].some((value) => !Number.isSafeInteger(value) || value < 0 || value > MAX_QUANTITY)) {
     throw new Error("Stock and low-stock threshold must be non-negative whole numbers.");
   }
   if (payload.description != null) {
