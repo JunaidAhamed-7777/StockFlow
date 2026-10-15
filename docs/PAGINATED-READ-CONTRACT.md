@@ -1,9 +1,9 @@
 # Bounded product and order reads · issue #14
 
-Status: concrete implementation proposal, 16 October 2026 (Asia/Kolkata).
-The existing server remains unchanged pending explicit authorization for the
-read-code changes below. This contract requires no schema migration, new route,
-login change, business write or permission expansion.
+Status: implemented and verified, 16 October 2026 (Asia/Kolkata), after the user
+explicitly approved the scoped existing-server read changes. This contract
+requires no schema migration, new route, login change, business write or
+permission expansion. See `QA-PAGINATED-READS.md` for actual API/browser evidence.
 
 ## Compatibility and common page envelope
 
