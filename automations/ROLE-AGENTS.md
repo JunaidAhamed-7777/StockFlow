@@ -65,8 +65,17 @@ One short live model session per agent succeeded, each with exactly one successf
 Private evidence is in `.local/role-agent-verification.json`, `.local/role-agent-tool-verification.json`, and `.local/role-agent-smoke-verification.json`. Session and execution IDs are retained there for inspection in n8n. Configuration verification can be repeated without spending on model calls.
 
 See [the native agent QA report](../docs/QA-ROLE-AGENTS.md) for the 16 October
-scope, installer-repeatability and zero-model-call checks. Repeat the strict
-configuration verifier after inspecting Build/Settings in the native editor:
-unexpected enabled-memory drafts were observed during QA and restored to the
-published setup using **Revert changes**. The cause is tracked in issue #17;
-never publish an unexpected draft just to make current/published versions match.
+scope, installer-repeatability and zero-model-call checks. Prefer the read-only
+configuration verifier for inspection. The [editor investigation](../docs/QA-AGENT-EDITOR.md)
+confirmed that n8n 2.43.6 can autosave model defaults on opening an existing
+empty-model draft, and a non-memory field edit forces `memory.enabled: true`.
+That outer flag enables session persistence; cross-session episodic recall is
+controlled separately. Opening Build/Settings with a selected model did not
+change the disposable control, so the original configured-agent inspection
+trigger remains unproven.
+
+Repeat the strict verifier after editor inspection or edits. Back up an
+unexpected draft before using **Revert changes**, then verify the restored
+published configuration, tools and scheduled tasks. Do not publish an unexpected
+draft just to make current/published versions match. No reviewed stable upgrade
+has yet been verified to fix this normalization behavior.
