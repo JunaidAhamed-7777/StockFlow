@@ -33,6 +33,7 @@ export function CustomerProducts() {
   const [notice, setNotice] = useState("");
   const [page, setPage] = useState(1);
   const requestId = useRef(0);
+  const resultsRef = useRef(null);
 
   async function load(searchOverride, categoryOverride = category, supplierOverride = supplier) {
     const activeRequest = ++requestId.current;
@@ -80,6 +81,11 @@ export function CustomerProducts() {
   const pageCount = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
   const visibleProducts = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  function changePage(nextPage) {
+    setPage(nextPage);
+    requestAnimationFrame(() => resultsRef.current?.focus());
+  }
+
   return (
     <>
       <PageHeader
@@ -103,13 +109,13 @@ export function CustomerProducts() {
           <Button variant="ghost" onClick={clearFilters} disabled={loading}>Reset</Button>
         </form>
       </Card>
-      <p className="font-caption text-secondary" role="status" aria-live="polite">{notice}</p>
+      <p className={notice ? "font-caption text-secondary" : "sr-only"} role="status" aria-live="polite">{notice}</p>
       {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
       {loading ? <PageSkeleton /> : !error && (products.length === 0 ? (
         <Card><EmptyState icon="storefront" title="No products found" description="Try a different search or clear your filters." actionLabel="Clear filters" onAction={clearFilters} /></Card>
       ) : (
         <>
-          <p className="font-body-sm text-on-surface-variant" role="status">{products.length} products · Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, products.length)}</p>
+          <p ref={resultsRef} tabIndex={-1} className="font-body-sm text-on-surface-variant scroll-mt-20" role="status">{products.length} products · Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, products.length)}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-space-base">
             {visibleProducts.map((product) => {
               const status = stockStatus(product);
@@ -140,9 +146,9 @@ export function CustomerProducts() {
             })}
           </div>
           {pageCount > 1 ? <nav aria-label="Catalog pagination" className="flex items-center justify-between gap-space-base">
-            <Button variant="outline" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</Button>
+            <Button variant="outline" disabled={page === 1} onClick={() => changePage(page - 1)}>Previous</Button>
             <span className="font-body-sm" aria-live="polite">Page {page} of {pageCount}</span>
-            <Button variant="outline" disabled={page === pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button>
+            <Button variant="outline" disabled={page === pageCount} onClick={() => changePage(page + 1)}>Next</Button>
           </nav> : null}
         </>
       ))}
