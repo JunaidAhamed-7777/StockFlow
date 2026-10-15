@@ -3,7 +3,7 @@ import { listOrders } from "../../services/order.service";
 import { getDashboard } from "../../services/dashboard.service";
 import { getErrorMessage } from "../../utils/errors";
 import { formatCurrency, formatDate } from "../../utils/format";
-import { PageHeader } from "../../components/ui/PageHeader";
+import { PageHeader, ToolbarSearch } from "../../components/ui/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { Table } from "../../components/ui/Table";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -16,6 +16,7 @@ export function AdminCustomers() {
   const [metrics, setMetrics] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   async function load() {
     setLoading(true);
@@ -59,23 +60,26 @@ export function AdminCustomers() {
   }, [orders]);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
+
+  const filtered = customers.filter((item) => `${item.name} ${item.email}`.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <>
       <PageHeader
         breadcrumb={<><span>Sales</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Customers</span></>}
-        title="Customer Directory"
-        description="There is no dedicated customer-list endpoint. This directory is assembled from customers attached to orders, while the dashboard reports the full customer count."
+        title="Customer directory"
+        description="Customers with purchase history appear below. The registered count includes customers who have not placed an order."
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-space-base">
-        <StatCard label="Registered customers" value={metrics?.totalCustomers ?? 0} hint="From dashboard metrics" icon="groups" />
-        <StatCard label="Customers with orders" value={customers.length} hint="Derived from the orders API" icon="receipt_long" />
+        <StatCard label="Registered customers" value={metrics?.totalCustomers ?? 0} hint="All registered customer accounts" icon="groups" />
+        <StatCard label="Customers with orders" value={customers.length} hint="Customers with recorded purchases" icon="receipt_long" />
       </section>
+      <Card className="p-space-base"><ToolbarSearch value={search} onChange={setSearch} placeholder="Search customers by name or email" /></Card>
       <Card>
         <Table
-          rows={customers}
-          empty={<EmptyState icon="groups" title="No customers with recorded orders" description="Registered customers appear in the metric above once they place an order." />}
+          rows={filtered}
+          empty={<EmptyState icon="groups" title={search ? "No matching customers" : "No customers with recorded orders"} description={search ? "Try another name or email." : "Customer details appear here after their first order."} />}
           columns={[
             { key: "name", header: "Name" },
             { key: "email", header: "Email" },

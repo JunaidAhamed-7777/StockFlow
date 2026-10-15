@@ -51,7 +51,8 @@ for (let attempt = 0; attempt < 60; attempt++) {
 }
 const runtimeEnv = { ...process.env, DATABASE_URL: config.databaseUrl, JWT_SECRET: config.jwtSecret, BCRYPT_SALT_ROUNDS: '12', PORT: '3001', CLIENT_URL: 'http://localhost:5173' };
 const prisma = path.join(root, 'node_modules/prisma/build/index.js');
-run(process.execPath, [prisma, 'generate', '--schema', 'server/prisma/schema.prisma'], { env: runtimeEnv });
+// Avoid regenerating an engine DLL already loaded by the running API on Windows.
+if (!existsSync(path.join(root, 'node_modules/.prisma/client/index.js'))) run(process.execPath, [prisma, 'generate', '--schema', 'server/prisma/schema.prisma'], { env: runtimeEnv });
 if (!config.initialized) {
   // Bootstrap only our freshly created, isolated demo database using the unchanged schema.
   run(process.execPath, [prisma, 'db', 'push', '--schema', 'server/prisma/schema.prisma', '--skip-generate'], { env: runtimeEnv });

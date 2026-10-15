@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { getSupplier, getSuppliers } from "../../services/discovery.service";
+import { getSuppliers } from "../../services/discovery.service";
 import { listProducts } from "../../services/product.service";
 import { getErrorMessage } from "../../utils/errors";
-import { PageHeader } from "../../components/ui/PageHeader";
+import { PageHeader, ToolbarSearch } from "../../components/ui/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { Table } from "../../components/ui/Table";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -17,6 +17,7 @@ export function AdminSuppliers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
 
   async function load() {
     setLoading(true);
@@ -36,35 +37,30 @@ export function AdminSuppliers() {
     load();
   }, []);
 
-  async function openSupplier(row) {
-    try {
-      setSelected(await getSupplier(row.id));
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
-  }
-
   if (loading) return <PageSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
+
+  const filtered = suppliers.filter((item) => `${item.companyName} ${item.user?.name || ""} ${item.user?.email || ""}`.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <>
       <PageHeader
         breadcrumb={<><span>Procurement</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Suppliers</span></>}
-        title="Supplier Network"
-        description="Suppliers are loaded from GET /api/discovery/suppliers."
+        title="Supplier network"
+        description="Find your suppliers, review their contact details, and see catalog coverage."
       />
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
+      <Card className="p-space-base"><ToolbarSearch value={search} onChange={setSearch} placeholder="Search company, contact, or email" /></Card>
       <Card>
         <Table
-          rows={suppliers}
-          empty={<EmptyState icon="local_shipping" title="No suppliers found" />}
+          rows={filtered}
+          empty={<EmptyState icon="local_shipping" title="No suppliers found" description={search ? "Try a different company name or email." : "Suppliers appear here after registration."} />}
           columns={[
             { key: "companyName", header: "Company" },
-            { key: "contactNumber", header: "Contact" },
+            { key: "contactNumber", header: "Contact", render: (row) => row.contactNumber || "—" },
             { key: "address", header: "Address", render: (row) => row.address || "—" },
             { key: "user", header: "Account", render: (row) => row.user?.email || "—" },
             { key: "skus", header: "SKUs", align: "right", render: (row) => products.filter((item) => item.supplierId === row.id).length },
-            { key: "actions", header: "", render: (row) => <Button variant="outline" onClick={() => openSupplier(row)}>View</Button> },
+            { key: "actions", header: "", render: (row) => <Button variant="outline" aria-label={`View ${row.companyName}`} onClick={() => setSelected(row)}>View</Button> },
           ]}
         />
       </Card>
@@ -73,8 +69,8 @@ export function AdminSuppliers() {
           <dl className="space-y-space-sm font-body-sm">
             <div className="flex justify-between"><dt className="text-on-surface-variant">Supplier ID</dt><dd className="font-mono-data">{selected.id}</dd></div>
             <div className="flex justify-between"><dt className="text-on-surface-variant">Contact</dt><dd>{selected.contactNumber}</dd></div>
-            <div className="flex justify-between"><dt className="text-on-surface-variant">Address</dt><dd>{selected.address || "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-on-surface-variant">Linked user</dt><dd>{selected.user?.name} · {selected.user?.email}</dd></div>
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-space-sm"><dt className="text-on-surface-variant">Address</dt><dd className="break-words sm:text-right">{selected.address || "—"}</dd></div>
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-space-sm"><dt className="text-on-surface-variant">Linked user</dt><dd className="break-words sm:text-right">{selected.user?.name} · {selected.user?.email}</dd></div>
           </dl>
         ) : null}
       </Modal>
