@@ -6,6 +6,12 @@ Three additional [native role agents](ROLE-AGENTS.md) use GPT-5 mini for schedul
 
 **Local status verified on 15 October 2026: one labeled Discord connection test succeeded, and critical-stock alerts are enabled.** The other four workflows remain previews. The webhook is stored in n8n's encrypted credentials; the temporary URL file was deleted. All five installed graphs, credential bindings, published states, and disabled/enabled settings were checked after the activation restart. Private results are in `.local/discord-live-verification.json`. See [DISCORD.md](./DISCORD.md) for setup and activation. [MAIL-ROUTING.md](./MAIL-ROUTING.md) retains its filename for existing links and documents notification routing.
 
+The [16 October template migration](../docs/QA-NOTIFICATION-MIGRATION.md) applied
+the reviewed validation fixes and verified all five graphs and native trigger
+registrations after restart. Existing cooldowns, baselines, credentials and the
+critical-only destination policy were preserved. No additional connection post
+or manual delivery test was initiated.
+
 ## Workflows
 
 All five templates use existing endpoints. Schedules use **Asia/Kolkata**:
@@ -89,7 +95,7 @@ Repeated or ambiguous connection-test attempts are blocked for the same webhook 
 
 Cooldowns and baselines use [n8n workflow static data](https://docs.n8n.io/code/cookbook/builtin/get-workflow-static-data/), which persists after successful published executions. Manual editor tests do not persist it. Keep one local instance and avoid overlapping manual and scheduled sends. A network failure after Discord accepts a post, or concurrent executions, can still produce duplicates. A transactional outbox would require future backend work.
 
-The existing API has coarse roles, so the local automation account needs `ADMIN` to read all orders. Its password and runtime details remain in ignored `.local/`; account logins are documented privately by `node scripts/write-login-doc.mjs`. Workflow exports contain no passwords, webhook URLs, or OpenAI keys. The backend and database schema are unchanged.
+The existing API has coarse roles, so the local automation account needs `ADMIN` to read all orders. Its password and runtime details remain in ignored `.local/`; account logins are documented privately by `node scripts/write-login-doc.mjs`. Workflow exports contain no passwords, webhook URLs, or OpenAI keys. Notification tools use existing API routes and do not change authentication or the database schema.
 
 ## Changing the destination channel
 
