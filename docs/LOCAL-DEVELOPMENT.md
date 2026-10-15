@@ -34,7 +34,9 @@ The equivalent direct commands are `node scripts/local-runtime.mjs status`, `sto
 
 `restart` restarts those verified application processes, ensures that the existing database and n8n containers are running, and waits for readiness again. It preserves their data and credentials. The launcher does not restart n8n while it is already running, because the existing n8n instance may also contain the user's other workflows.
 
-The runtime serializes start/stop/restart commands with `.local/runtime.lock`. If another command is still running, wait for it to finish. A lock whose recorded process no longer exists is removed automatically on the next attempt.
+The runtime serializes start/stop/restart commands with `.local/runtime.lock`. Its owner includes a PID, process creation time, script and unique token. Commands read runtime state only after acquiring the lock; marker updates use an atomic same-directory rename. If another command is running, wait for it to finish. A complete lock whose owner is proven absent, or whose PID has a different creation time, can be recovered automatically without stopping that process.
+
+Acquisition briefly uses `.local/runtime.lock.guard` so two commands cannot both recover the same stale lock. An existing guard, a partial/legacy lock or an unverifiable owner fails closed. Inspect the named file locally and confirm the owning command has stopped before manually removing only that lock or guard. Do not delete `runtime.json` as a lock-recovery step: it preserves resource identities and secrets.
 
 ## Database and n8n data
 
@@ -87,9 +89,11 @@ npm run typecheck
 npm run build
 npm run lint --workspace client
 npm test --workspace client
-node --test scripts/local-runtime.test.mjs
+node --test scripts/local-runtime.test.mjs scripts/local-runtime-flow.test.mjs scripts/runtime-lock.test.mjs
 ```
 
 Strict TypeScript checks cover the new shared foundations and typed API/storage boundaries. Existing JSX pages remain part of an incremental migration with `allowJs: true` and `checkJs: false`; the checks do not claim complete TypeScript coverage of every legacy page. The regression tests exercise cart/storage validation and runtime ownership checks without sending email or calling OpenAI.
 
 This launcher is for local development. Review [backend limitations](FRONTEND-LIMITATIONS.md) before exposing the application outside the local machine.
+
+See [lifecycle QA results](QA-LOCAL-RUNTIME.md) for the real browser/restart checks, isolated failure matrix and remaining clean-host verification.
