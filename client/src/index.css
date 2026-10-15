@@ -2,6 +2,18 @@
 @config "../tailwind.config.js";
 
 @layer base {
+  :root {
+    --scrollbar-thumb: #64748b;
+    --scrollbar-track: #f1f5f9;
+    --scrollbar-hover: #475569;
+    --scrollbar-active: #0f172a;
+  }
+
+  html {
+    scrollbar-gutter: stable;
+    scroll-padding-top: 5rem;
+  }
+
   html,
   body,
   #root {
@@ -22,8 +34,31 @@
     border-color: #e2e8f0;
   }
 
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border: 3px solid var(--scrollbar-track);
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+  *::-webkit-scrollbar-thumb:active { background: var(--scrollbar-active); }
+
   :focus-visible {
-    outline: 2px solid #2563eb !important;
+    outline: 2px solid #2563eb;
     outline-offset: 3px;
   }
 
@@ -33,6 +68,7 @@
 
   input, select, textarea {
     accent-color: #2563eb;
+    caret-color: #2563eb;
     scroll-margin-top: 5rem;
   }
 
@@ -47,12 +83,21 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, ::before, ::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
+    html { scroll-behavior: auto; }
+    .animate-ping, .animate-pulse, .animate-spin {
+      /* Keep the text/status visible while removing continuous motion. */
+      animation: none;
     }
+    .transition-all, .transition-transform {
+      transition-property: color, background-color, border-color, opacity;
+    }
+  }
+
+  @media (forced-colors: active) {
+    * { scrollbar-color: auto; }
+    *::-webkit-scrollbar-thumb { background: CanvasText; border-color: Canvas; }
+    *::-webkit-scrollbar-track { background: Canvas; }
+    :focus-visible { outline-color: Highlight; }
   }
 
   @media (pointer: coarse) {
