@@ -17,5 +17,6 @@ export function publicUser(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    ...(Array.isArray(user.truncatedFields) ? { truncatedFields: [...new Set(user.truncatedFields.filter((field) => field === "name" || field === "email"))] } : {}),
   };
 }
