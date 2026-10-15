@@ -10,7 +10,7 @@ const response = (data, options) => new Response(JSON.stringify({ data }), optio
 function fixture(overrides = {}) {
   const state = {
     workflows: new Map(ids.map((id) => [id, { id, versionId: `version-${id}`, active: true, activeVersionId: `version-${id}`, activeVersion: { versionId: `version-${id}` }, checksum: `checksum-${id}` }])),
-    settings: { versionCli: '2.43.6', executionMode: 'regular', isMultiMain: false, useWorkflowPublicationService: false },
+    settings: { versionCli: '2.43.6', executionMode: 'regular', isMultiMain: false, useWorkflowPublicationService: overrides.outbox ?? false },
     calls: [], sessions: 0, verified: 0, ownerReads: 0, milliseconds: 0, deactivated: [], drainReads: 0,
     activeErrors: new Map(), owner: true,
   };
@@ -28,6 +28,13 @@ function fixture(overrides = {}) {
     if (url.pathname === '/rest/active-workflows') return response([...state.workflows.values()].filter((row) => row.active).map((row) => row.id).concat('UnrelatedAgentWorkflow'));
     const errorId = url.pathname.match(/^\/rest\/active-workflows\/error\/([A-Za-z0-9_-]+)$/)?.[1];
     if (errorId) return response(state.activeErrors.get(errorId) ?? null);
+    const publicationId = url.pathname.match(/^\/rest\/workflows\/([A-Za-z0-9_-]+)\/publication-status$/)?.[1];
+    if (publicationId) {
+      const workflow = state.workflows.get(publicationId);
+      return response(overrides.publication?.(publicationId, state) ?? (workflow.active
+        ? { status: 'published', liveVersionId: workflow.activeVersionId, pendingVersionId: null, triggers: ['schedule', 'manual-check'].map((nodeId) => ({ nodeId, status: 'activated', errorMessage: null })) }
+        : { status: 'not_published', liveVersionId: null, pendingVersionId: null, triggers: [] }));
+    }
     const workflow = url.pathname.match(/^\/rest\/workflows\/([A-Za-z0-9_-]+)(\/deactivate)?$/);
     if (workflow) {
       assert.ok(ids.includes(workflow[1]));
@@ -85,7 +92,7 @@ test('stale last workflow versions and unsupported runtime modes abort before an
   const stale = fixture(); const expected = stale.expected(); stale.state.workflows.get(ids.at(-1)).versionId = 'concurrent-version';
   await assert.rejects(stale.helper.quiesce(expected), (error) => error.paused === false && error.deactivatedCount === 0);
   assert.deepEqual(stale.state.deactivated, []);
-  for (const mutation of [{ versionCli: '2.43.7' }, { executionMode: 'queue' }, { isMultiMain: true }, { useWorkflowPublicationService: true }]) {
+  for (const mutation of [{ versionCli: '2.43.7' }, { executionMode: 'queue' }, { isMultiMain: true }, { useWorkflowPublicationService: undefined }, { useWorkflowPublicationService: 'true' }]) {
     const f = fixture(); Object.assign(f.state.settings, mutation);
     await assert.rejects(f.helper.quiesce(f.expected()), /Unsupported/); assert.deepEqual(f.state.deactivated, []);
   }
@@ -130,7 +137,57 @@ test('reactivation during execution drain is detected before reporting quiesced'
       workflow.active = true; workflow.activeVersionId = workflow.versionId; workflow.activeVersion = { versionId: workflow.versionId };
     }
   } });
-  await assert.rejects(f.helper.quiesce(f.expected()), (error) => error.paused === false && error.deactivatedCount === 5 && /changed during drain/.test(error.message));
+  await assert.rejects(f.helper.quiesce(f.expected()), (error) => error.paused === false && error.deactivatedCount === 5 && /not paused|changed during drain/.test(error.message));
+});
+
+test('outbox mode waits for daemon teardown proof before reading executions', async () => {
+  const f = fixture({ outbox: true, publication: (id, state) => !state.workflows.get(id).active && state.milliseconds === 0
+    ? { status: 'in_progress', liveVersionId: `version-${id}`, pendingVersionId: null, triggers: [{ nodeId: 'schedule', status: 'activated', errorMessage: null }] } : undefined,
+  executions: (_, state) => { assert.equal(state.milliseconds, 10); } });
+  assert.deepEqual(await f.helper.quiesce(f.expected()), { quiesced: true, deactivatedCount: 5, drained: true });
+  assert.equal(f.state.drainReads, 5); assert.equal(f.state.milliseconds, 10);
+  const firstMutation = f.state.calls.findIndex(({ url }) => url.pathname.endsWith('/deactivate'));
+  assert.equal(f.state.calls.slice(0, firstMutation).filter(({ url }) => url.pathname.endsWith('/publication-status')).length, 5);
+  assert.ok(f.state.calls.filter(({ url }) => url.pathname.endsWith('/publication-status')).length >= 20);
+});
+
+test('outbox teardown timeout/malformed/failed states remain unverified and never begin execution drain', async () => {
+  const states = [
+    { status: 'in_progress', liveVersionId: 'old-live-version', pendingVersionId: null, triggers: [] },
+    { status: 'not_published', liveVersionId: 'old-live-version', pendingVersionId: null, triggers: [] },
+    { status: 'not_published', liveVersionId: null, pendingVersionId: null, triggers: [{ nodeId: 'schedule', status: 'activated', errorMessage: null }] },
+    { status: 'failed', liveVersionId: null, pendingVersionId: null, triggers: [{ nodeId: 'schedule', status: 'failed', errorMessage: 'OFFLINE_PRIVATE_ERROR' }] },
+  ];
+  for (const status of states) {
+    const f = fixture({ outbox: true, publication: (id, state) => !state.workflows.get(id).active ? status : undefined });
+    await assert.rejects(f.helper.quiesce(f.expected()), (error) => error.paused === false && error.deactivatedCount === 5 && !error.message.includes('OFFLINE'));
+    assert.equal(f.state.drainReads, 0);
+  }
+  const absent = fixture({ outbox: true, request: (url) => url.pathname.endsWith('/publication-status') ? new Response('OFFLINE_PRIVATE_ERROR', { status: 404 }) : undefined });
+  await assert.rejects(absent.helper.quiesce(absent.expected())); assert.deepEqual(absent.state.deactivated, []);
+});
+
+test('outbox activation waits for settled exact schedule/manual trigger registration', async () => {
+  const f = fixture({ outbox: true, publication: (id, state) => state.milliseconds === 0
+    ? { status: 'in_progress', liveVersionId: null, pendingVersionId: `version-${id}`, triggers: [] } : undefined });
+  assert.deepEqual(await f.helper.verifyActive(ids), { activeCount: 5, activationErrors: 0 });
+  assert.equal(f.state.milliseconds, 10);
+  const expected = { status: 'published', liveVersionId: `version-${ids[0]}`, pendingVersionId: null, triggers: ['schedule', 'manual-check'].map((nodeId) => ({ nodeId, status: 'activated', errorMessage: null })) };
+  const invalid = [
+    { ...expected, liveVersionId: 'other-version' }, { ...expected, pendingVersionId: 'pending-version' },
+    { ...expected, triggers: expected.triggers.slice(0, 1) },
+    { ...expected, triggers: [...expected.triggers, { nodeId: 'unrelated-trigger', status: 'activated', errorMessage: null }] },
+    { ...expected, triggers: [expected.triggers[0], expected.triggers[0]] },
+    { ...expected, status: 'partial', triggers: [expected.triggers[0], { nodeId: 'manual-check', status: 'failed', errorMessage: 'OFFLINE_PRIVATE_ERROR' }] },
+    { ...expected, triggers: [expected.triggers[0], { nodeId: 'manual-check', status: 'activated', errorMessage: 'OFFLINE_PRIVATE_ERROR' }] },
+  ];
+  for (const status of invalid) {
+    const bad = fixture({ outbox: true, publication: (id) => id === ids[0] ? status : undefined });
+    await assert.rejects(bad.helper.verifyActive(ids), (error) => !error.message.includes('OFFLINE'));
+    assert.deepEqual(bad.state.deactivated, []);
+  }
+  const stuck = fixture({ outbox: true, publication: (id) => ({ status: 'in_progress', liveVersionId: null, pendingVersionId: `version-${id}`, triggers: [] }) });
+  await assert.rejects(stuck.helper.verifyActive(ids), /activation did not settle/); assert.equal(stuck.state.milliseconds, 20);
 });
 
 test('verification reauthenticates after restart, requires all five published IDs and checks activation errors', async () => {
