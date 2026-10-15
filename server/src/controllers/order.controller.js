@@ -4,11 +4,15 @@ const {
   getOrdersForSupplier,
   getAllOrders,
   getOrderById,
+  getOrderPage,
   updateOrderStatus,
 } = require('../services/orderService');
+const { pageRequested, readError } = require('../services/readQuery');
 
 const listOrders = async (req, res, next) => {
   try {
+    if (pageRequested(req.query)) return res.json(await getOrderPage(req.query, req.user));
+    if (Object.hasOwn(req.query, 'view')) throw readError('Order views require page');
     let orders;
     if (req.user.role === 'SUPPLIER') {
       if (!req.user.supplierId) {
@@ -26,6 +30,8 @@ const listOrders = async (req, res, next) => {
 
 const listAllOrders = async (req, res, next) => {
   try {
+    if (pageRequested(req.query)) return res.json(await getOrderPage(req.query, req.user));
+    if (Object.hasOwn(req.query, 'view')) throw readError('Order views require page');
     const orders = await getAllOrders();
     res.json({ success: true, data: orders });
   } catch (err) {

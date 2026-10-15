@@ -1,4 +1,5 @@
 const prisma = require('../prismaClient');
+const { getOrderPage, getOrderDetail } = require('./pagedReadService').createPagedReads(prisma);
 
 const createOrder = async (userId, items, userRole) => {
   if (userRole && userRole !== 'CUSTOMER') {
@@ -90,30 +91,7 @@ const getAllOrders = async () => {
   });
 };
 
-const getOrderById = async (id, user) => {
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: {
-      orderItems: { include: { product: { include: { supplier: true } } } },
-      customer: true,
-    },
-  });
-  if (!order) throw new Error('Order not found');
-
-  // Access control: customer only for own orders; supplier only for orders containing their products.
-  if (user.role === 'CUSTOMER' && order.customerId !== user.id) {
-    const err = new Error('Forbidden'); err.status = 403; throw err;
-  }
-  if (user.role === 'SUPPLIER') {
-    const hasProduct = order.orderItems.some(
-      (oi) => oi.product && oi.product.supplierId === user.supplierId
-    );
-    if (!hasProduct) {
-      const err = new Error('Forbidden'); err.status = 403; throw err;
-    }
-  }
-  return order;
-};
+const getOrderById = async (id, user) => getOrderDetail(id, user);
 
 const updateOrderStatus = async (id, status, user) => {
   const order = await prisma.order.findUnique({ where: { id } });
@@ -146,5 +124,6 @@ module.exports = {
   getOrdersForSupplier,
   getAllOrders,
   getOrderById,
+  getOrderPage,
   updateOrderStatus,
 };
