@@ -6,8 +6,10 @@ import { readStorage, writeStorage } from "../../utils/storage";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { Loading } from "../ui/Loading";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { useAuth } from "../../context/AuthContext";
 
 export function AppShell() {
+  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => readStorage("stockflow.navigation.collapsed", false) === true);
   const location = useLocation();
@@ -52,7 +54,7 @@ export function AppShell() {
         <Header onMenu={() => setMobileOpen(true)} collapsed={collapsed} mobileOpen={mobileOpen} />
         <main ref={mainRef} id="main-content" tabIndex={-1} className="relative min-h-screen w-full min-w-0 px-3 pb-6 pt-[4.75rem] sm:px-space-xl sm:pb-space-xl">
           <div className="flex flex-col w-full min-w-0 max-w-[1600px] mx-auto gap-space-xl">
-            <ErrorBoundary key={location.pathname}><Suspense fallback={<Loading label="Loading workspace…" />}><Outlet /></Suspense></ErrorBoundary>
+            <ErrorBoundary key={`${user?.id}:${location.pathname}`}><Suspense fallback={<Loading label="Loading workspace…" />}><Outlet /></Suspense></ErrorBoundary>
           </div>
         </main>
       </div>
