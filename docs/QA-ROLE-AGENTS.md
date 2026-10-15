@@ -72,6 +72,13 @@ No unexpected draft was published. The cause of the editor behavior is unproven
 and tracked in #17; repeat configuration verification after browser inspection.
 The verifier was kept strict and gained an explicit enabled-memory draft test.
 
+The [controlled follow-up investigation](QA-AGENT-EDITOR.md) reproduced an
+empty-model Build visit autosaving defaults and a non-memory field edit forcing
+the outer memory flag on. A selected-model/no-credential Build/Settings control
+stayed unchanged. This identifies native normalization behavior without proving
+the original configured-agent inspection trigger. The outer flag controls
+session persistence; cross-session episodic recall is a separate setting.
+
 Local browser evidence includes `artifacts/qa/supplier-agent-schedule.jpg`,
 `supplier-agent-controls.jpg` and `customer-agent-draft-restored.jpg`. Earlier
 editor screenshots must not be treated as proof of the final stored config;
