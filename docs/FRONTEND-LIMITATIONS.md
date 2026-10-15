@@ -15,6 +15,8 @@ The production frontend uses the existing StockFlow API. No changes to `server/`
 
 ## Operational limitations
 
+- **Backend dependencies still need review.** On October 15, 2026, `npm audit --workspace server` reported four findings (three moderate, one critical, including `proxy-addr`). Server dependency declarations were preserved under the backend scope restriction. The upgraded frontend dependency audit reports zero findings.
+
 - **Cancelling an order does not restore stock.** `server/src/services/orderService.js`, `updateOrderStatus`, updates only the order status. The UI states this when selecting cancellation. Until inventory restoration is implemented transactionally and idempotently, returned units must be recorded through a manual stock adjustment.
 - **The product update API can change quantity without an audit entry.** `server/src/services/productService.js`, `updateProduct`, does not write a stock transaction. The product edit UI now omits quantity entirely so an edit cannot overwrite newer inventory, shows the quantity observed when the form opened as read-only reference, and directs stock changes to the inventory adjustment workflow. A future backend change should prevent unaudited quantity updates through direct API calls or route them through the same transactional audit logic.
 - **The products API's low-stock filter uses a single threshold.** `server/src/services/productService.js`, `getAll`, uses `filters.lowStockThreshold || 10` rather than each product's `lowStockThreshold`. The admin catalog therefore applies its low-stock filter locally to the returned products. Inventory exception views use the existing stock service, which compares each product's own threshold.

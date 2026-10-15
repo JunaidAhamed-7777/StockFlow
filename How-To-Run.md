@@ -1,5 +1,7 @@
 # Stock Management System using Agentic AI — How to Run
 
+> For the current one-command local setup (including n8n), use [README.md](README.md) and [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md). This older walkthrough remains an API reference. Its previous port, credential, frontend-status, and Prisma setup examples do not describe the new isolated local launcher. All working account credentials are documented privately in `.local/LOGIN-ACCOUNTS.md`.
+
 This document explains how to initialize the development environment, start the backend, verify the database and API, test authentication and role-based authorization, and run the frontend.
 
 The active backend is located in:
