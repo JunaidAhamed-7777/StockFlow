@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
+import { mkdir, open, readFile, writeFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { profiles, products } from './data/demo-catalog.mjs';
@@ -25,6 +25,26 @@ async function saveJson(filename, value) {
     await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
     await rename(temporary, filename);
   } finally { await rm(temporary, { force: true }); }
+}
+
+async function acquireSeedLock(localDirectory) {
+  await mkdir(localDirectory, { recursive: true });
+  const filename = path.join(localDirectory, 'demo-seed.lock');
+  const owner = JSON.stringify({ pid: process.pid, token: randomUUID() });
+  let handle;
+  try {
+    handle = await open(filename, 'wx', 0o600);
+    await handle.writeFile(owner);
+    await handle.close();
+  } catch (error) {
+    if (handle) { await handle.close(); await rm(filename, { force: true }); }
+    if (error.code === 'EEXIST') throw new DemoSeedError('Demo seed lock already exists. Verify no seed process is running, then remove demo-seed.lock manually if it is stale.');
+    throw error;
+  }
+  return async () => {
+    try { if (await readFile(filename, 'utf8') === owner) await rm(filename); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  };
 }
 
 async function inspectOwnedContainer(name) {
@@ -51,24 +71,7 @@ export async function runDemoSeed({
   if (!['http:', 'https:'].includes(baseUrl.protocol) || baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash) throw new DemoSeedError('Invalid API URL.');
   if (!apply) return { dryRun: true, demoProfiles: profiles.length, demoProducts: products.length };
 
-  const credentialsPath = path.join(localDirectory, 'demo-accounts.json');
-  let runtime;
-  if (localSupplierProfiles) {
-    runtime = await readJson(path.join(localDirectory, 'runtime.json'), null);
-    validateRuntimeConfig(runtime);
-    if (runtime.initialized !== true || typeof runtime.containerId !== 'string' || !runtime.containerId.trim()) {
-      throw new DemoSeedError('Supplier bootstrap requires an initialized runtime with a saved database container ID.');
-    }
-    validateDatabaseContainer(await inspectContainer(runtime.containerName), runtime);
-  }
-  const saved = await readJson(credentialsPath, { version: 1, accounts: {} });
-  if (saved.version !== 1 || !saved.accounts || typeof saved.accounts !== 'object' || Array.isArray(saved.accounts)) throw new DemoSeedError('Unsupported demo credentials format.');
-  for (const profile of profiles) {
-    if (!Object.hasOwn(saved.accounts, profile.email)) continue;
-    const record = saved.accounts[profile.email];
-    if (!record || typeof record.password !== 'string' || !record.password || record.name !== profile.name || record.role !== profile.role) throw new DemoSeedError('Saved demo account metadata is incomplete or does not match the intended profile.');
-  }
-
+  const releaseLock = await acquireSeedLock(localDirectory);
   let token;
   async function api(endpoint, options = {}) {
     const { body, ...rest } = options;
@@ -92,6 +95,23 @@ export async function runDemoSeed({
 
   let prisma;
   try {
+    const credentialsPath = path.join(localDirectory, 'demo-accounts.json');
+    let runtime;
+    if (localSupplierProfiles) {
+      runtime = await readJson(path.join(localDirectory, 'runtime.json'), null);
+      validateRuntimeConfig(runtime);
+      if (runtime.initialized !== true || typeof runtime.containerId !== 'string' || !runtime.containerId.trim()) {
+        throw new DemoSeedError('Supplier bootstrap requires an initialized runtime with a saved database container ID.');
+      }
+      validateDatabaseContainer(await inspectContainer(runtime.containerName), runtime);
+    }
+    const saved = await readJson(credentialsPath, { version: 1, accounts: {} });
+    if (saved.version !== 1 || !saved.accounts || typeof saved.accounts !== 'object' || Array.isArray(saved.accounts)) throw new DemoSeedError('Unsupported demo credentials format.');
+    for (const profile of profiles) {
+      if (!Object.hasOwn(saved.accounts, profile.email)) continue;
+      const record = saved.accounts[profile.email];
+      if (!record || typeof record.password !== 'string' || !record.password || record.name !== profile.name || record.role !== profile.role) throw new DemoSeedError('Saved demo account metadata is incomplete or does not match the intended profile.');
+    }
     await api('/health');
     const login = await api('/auth/login', { method: 'POST', body: { email: adminEmail, password: adminPassword } });
     if (login.user?.role !== 'ADMIN' || login.user.email !== adminEmail || !Number.isSafeInteger(login.user.id) || login.user.id <= 0 || typeof login.token !== 'string' || !login.token) throw new DemoSeedError('An existing matching local ADMIN account is required.');
@@ -103,7 +123,6 @@ export async function runDemoSeed({
       const admin = await prisma.user.findUnique({ where: { id: login.user.id }, select: { email: true, role: true } });
       if (admin?.email !== login.user.email || admin?.role !== 'ADMIN') throw new DemoSeedError('Runtime database does not match API admin identity.');
     }
-    await mkdir(localDirectory, { recursive: true });
     const saveCredentials = () => saveJson(credentialsPath, saved);
     let createdProfiles = 0;
     const supplierIds = new Map();
@@ -168,7 +187,10 @@ export async function runDemoSeed({
     };
     await saveJson(path.join(localDirectory, 'demo-seed-result.json'), summary);
     return summary;
-  } finally { await prisma?.$disconnect(); }
+  } finally {
+    try { await prisma?.$disconnect(); }
+    finally { await releaseLock(); }
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

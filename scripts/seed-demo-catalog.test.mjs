@@ -131,6 +131,7 @@ test('first run creates eight accounts, four supplier records and forty products
 test('registration committed before a lost response resumes with its previously saved password', async (t) => {
   const f = await fixture(t); f.state.loseRegistrationResponse = true;
   await assert.rejects(runDemoSeed(f.options), /local API request failed or redirected/);
+  await assert.rejects(access(path.join(f.localDirectory, 'demo-seed.lock')), { code: 'ENOENT' });
   assert.equal(f.state.users.size, 2); assert.equal(f.state.suppliers.length, 0);
   const before = f.state.users.get(profiles[0].email).passwordHash;
   const saved = (await f.credentials()).accounts[profiles[0].email];
@@ -140,6 +141,34 @@ test('registration committed before a lost response resumes with its previously 
   assert.equal(f.state.users.get(profiles[0].email).passwordHash, before);
   assert.equal((await f.credentials()).accounts[profiles[0].email].password, saved.password);
   assert.equal(f.state.disconnects, 2);
+});
+
+test('concurrent apply refuses a held lock, preserves its owner, and keeps rerun credentials stable', async (t) => {
+  const f = await fixture(t);
+  let unblock;
+  let entered;
+  const held = new Promise((resolve) => { unblock = resolve; });
+  const started = new Promise((resolve) => { entered = resolve; });
+  f.state.intercept = async ({ endpoint }) => { if (endpoint === '/api/health') { entered(); await held; } };
+  const first = runDemoSeed(f.options);
+  try {
+    await started;
+    const filename = path.join(f.localDirectory, 'demo-seed.lock');
+    const owner = await readFile(filename, 'utf8');
+    await assert.rejects(runDemoSeed(f.options), /Verify no seed process is running/);
+    assert.equal(await readFile(filename, 'utf8'), owner);
+    assert.equal(f.state.calls.length, 1); assert.equal(f.state.users.size, 1); assert.equal(f.state.dbWrites, 0);
+    unblock();
+    assert.equal((await first).createdProfiles, 8);
+    await assert.rejects(access(filename), { code: 'ENOENT' });
+    const before = await f.credentials();
+    const repeated = await runDemoSeed(f.options);
+    assert.equal(repeated.createdProfiles, 0); assert.equal(repeated.createdProducts, 0);
+    assert.deepEqual(await f.credentials(), before);
+    await writeFile(filename, 'stale-or-foreign-owner');
+    await assert.rejects(runDemoSeed(f.options), /remove demo-seed.lock manually/);
+    assert.equal(await readFile(filename, 'utf8'), 'stale-or-foreign-owner');
+  } finally { unblock(); await first; }
 });
 
 test('interrupted product creation resumes only missing SKUs', async (t) => {
