@@ -11,6 +11,7 @@ import { StatusBadge } from "../../components/ui/Badge";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Loading } from "../../components/ui/Loading";
 import { Input } from "../../components/ui/Input";
+import { ProductImage } from "../../components/ProductImage";
 
 export function CustomerProductDetail() {
   const { id } = useParams();
@@ -31,7 +32,11 @@ export function CustomerProductDetail() {
       setError("");
       try {
         const data = await getProduct(id);
-        if (!cancelled) setProduct(data);
+        if (!cancelled) {
+          setProduct(data);
+          setQuantity(1);
+          setNotice("");
+        }
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
       } finally {
@@ -51,8 +56,12 @@ export function CustomerProductDetail() {
   const status = stockStatus(product);
 
   function onAdd() {
+    if (!Number.isSafeInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > Number(product.quantity)) {
+      setNotice("Enter a whole number between 1 and the available stock.");
+      return;
+    }
     addItem(product, quantity);
-    setNotice("Added to cart.");
+    setNotice("Added to your cart. Quantities are limited to available stock.");
   }
 
   return (
@@ -64,21 +73,25 @@ export function CustomerProductDetail() {
         actions={<Button variant="outline" onClick={() => navigate("/customer/products")}>Back to catalog</Button>}
       />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
-        <Card className="lg:col-span-8 p-space-xl space-y-space-md">
-          <p className="font-body-md text-on-surface-variant">{product.description || "No engineering description was provided for this SKU."}</p>
+        <Card className="lg:col-span-8 overflow-hidden">
+          <ProductImage product={product} className="h-64 sm:h-80 w-full" showCredit />
+          <div className="p-space-xl space-y-space-md">
+          <h2 className="font-headline-sm">Product information</h2>
+          <p className="font-body-md text-on-surface-variant">{product.description || "Contact the supplier for further product information."}</p>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-space-md font-body-sm">
             <div><dt className="text-outline uppercase tracking-wider font-caption">SKU</dt><dd className="font-mono-data">{product.sku}</dd></div>
             <div><dt className="text-outline uppercase tracking-wider font-caption">Category</dt><dd>{product.category?.name || "—"}</dd></div>
             <div><dt className="text-outline uppercase tracking-wider font-caption">Supplier</dt><dd>{product.supplier?.companyName || "—"}</dd></div>
             <div><dt className="text-outline uppercase tracking-wider font-caption">Available</dt><dd>{product.quantity}</dd></div>
           </dl>
+          </div>
         </Card>
         <Card className="lg:col-span-4 p-space-xl space-y-space-md">
           <div className="font-headline-lg">{formatCurrency(product.price)}</div>
-          <Input id="qty" label="Quantity" type="number" min="1" max={product.quantity} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
-          <Button className="w-full" disabled={status === "OUT"} onClick={onAdd}>Add to wholesale cart</Button>
-          <Button className="w-full" variant="outline" onClick={() => navigate("/customer/cart")}>Go to checkout</Button>
-          {notice ? <p className="font-caption text-secondary">{notice}</p> : null}
+          <Input id="qty" label="Quantity" type="number" min="1" step="1" max={product.quantity} disabled={status === "OUT"} value={quantity} onChange={(e) => setQuantity(e.target.value === "" ? "" : Number(e.target.value))} hint={`${product.quantity} units currently available`} />
+          <Button className="w-full" disabled={status === "OUT" || !Number.isSafeInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > Number(product.quantity)} onClick={onAdd}>{status === "OUT" ? "Out of stock" : "Add to cart"}</Button>
+          <Button className="w-full" variant="outline" onClick={() => navigate("/customer/cart")}>View cart</Button>
+          <p className="font-caption text-secondary" role="status" aria-live="polite">{notice}</p>
         </Card>
       </div>
     </>

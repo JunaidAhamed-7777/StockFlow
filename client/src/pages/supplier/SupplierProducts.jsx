@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { listProducts } from "../../services/product.service";
@@ -24,26 +24,29 @@ export function SupplierProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const requestId = useRef(0);
 
   async function load(searchOverride) {
+    const activeRequest = ++requestId.current;
     if (!supplier?.id) {
       setProducts([]);
       setLoading(false);
       setError("No supplier profile is linked to this account, so owned SKUs cannot be loaded.");
       return;
     }
-    const searchValue = (searchOverride ?? search).trim();
+    const searchValue = (typeof searchOverride === "string" ? searchOverride : search).trim();
     setLoading(true);
     setError("");
     try {
       const params = { supplier: supplier.id };
       if (searchValue) params.search = searchValue;
       const [rows, cats] = await Promise.all([listProducts(params), getCategories()]);
+      if (activeRequest !== requestId.current) return;
       setProducts(enrichProducts(rows || [], cats || [], [supplier]));
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
@@ -51,6 +54,7 @@ export function SupplierProducts() {
     const next = new URLSearchParams(location.search).get("search") || "";
     setSearch(next);
     load(next);
+    return () => { requestId.current += 1; };
   }, [supplier?.id, location.search]);
 
   const columns = useMemo(
@@ -70,16 +74,18 @@ export function SupplierProducts() {
     <>
       <PageHeader
         breadcrumb={<><span>Catalog</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Supplier products</span></>}
-        title="Supplied Product Catalog"
-        description="Only SKUs owned by your supplier profile are requested from the catalog API."
+        title="Your products"
+        description="Manage the products and stock supplied by your company."
         actions={<Button variant="dark" onClick={() => navigate("/supplier/products/new")} icon={<Icon name="add" size={16} />}>Add product</Button>}
       />
-      <Card className="p-space-base flex gap-space-sm">
+      <Card className="p-space-base">
+      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col sm:flex-row gap-space-sm" aria-label="Search your products">
         <ToolbarSearch value={search} onChange={setSearch} placeholder="Search your SKUs" />
-        <Button onClick={load}>Search</Button>
+        <Button type="submit" disabled={loading}>Search</Button>
+      </form>
       </Card>
       {error ? <ErrorState message={error} onRetry={load} /> : null}
-      {loading ? <PageSkeleton /> : (
+      {loading ? <PageSkeleton /> : !error && (
         <Card>
           <Table rows={products} columns={columns} empty={<EmptyState icon="inventory_2" title="No products found" actionLabel="Create product" onAction={() => navigate("/supplier/products/new")} />} />
         </Card>

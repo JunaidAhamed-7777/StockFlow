@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { listProducts } from "../../services/product.service";
 import { getCategories, getSuppliers } from "../../services/discovery.service";
@@ -14,13 +14,15 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { PageSkeleton } from "../../components/ui/Loading";
 import { Icon } from "../../components/ui/Icon";
+import { ProductImage } from "../../components/ProductImage";
+
+const PAGE_SIZE = 12;
 
 export function CustomerProducts() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { addItem } = useCart();
-  const initialSearch = new URLSearchParams(location.search).get("search") || "";
-  const [search, setSearch] = useState(initialSearch);
+  const { addItem, count } = useCart();
+  const [search, setSearch] = useState(new URLSearchParams(location.search).get("search") || "");
   const [category, setCategory] = useState("");
   const [supplier, setSupplier] = useState("");
   const [products, setProducts] = useState([]);
@@ -29,24 +31,29 @@ export function CustomerProducts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [page, setPage] = useState(1);
+  const requestId = useRef(0);
 
-  async function load(searchOverride) {
-    const searchValue = (searchOverride ?? search).trim();
+  async function load(searchOverride, categoryOverride = category, supplierOverride = supplier) {
+    const activeRequest = ++requestId.current;
+    const searchValue = (typeof searchOverride === "string" ? searchOverride : search).trim();
     setLoading(true);
     setError("");
     try {
       const params = {};
       if (searchValue) params.search = searchValue;
-      if (category) params.category = category;
-      if (supplier) params.supplier = supplier;
+      if (categoryOverride) params.category = categoryOverride;
+      if (supplierOverride) params.supplier = supplierOverride;
       const [rows, cats, sups] = await Promise.all([listProducts(params), getCategories(), getSuppliers()]);
+      if (activeRequest !== requestId.current) return;
       setCategories(cats || []);
       setSuppliers(sups || []);
       setProducts(enrichProducts(rows || [], cats || [], sups || []));
+      setPage(1);
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
@@ -54,68 +61,91 @@ export function CustomerProducts() {
     const next = new URLSearchParams(location.search).get("search") || "";
     setSearch(next);
     load(next);
+    return () => { requestId.current += 1; };
   }, [location.search]);
 
-  function addToCart(product) {
-    if ((product.quantity || 0) <= 0) return;
-    addItem(product, 1);
-    setNotice(`${product.name} added to cart.`);
+  function clearFilters() {
+    setSearch("");
+    setCategory("");
+    setSupplier("");
+    load("", "", "");
   }
+
+  function addToCart(product) {
+    if (Number(product.quantity) <= 0) return;
+    addItem(product, 1);
+    setNotice(`${product.name} added to your cart. Quantities are limited to available stock.`);
+  }
+
+  const pageCount = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
+  const visibleProducts = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <>
       <PageHeader
-        breadcrumb={<><span>Catalog</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Contracted products</span></>}
-        title="Product Catalog"
-        description="Live SKUs from GET /api/products."
-        actions={<Button variant="ghost" onClick={() => navigate("/customer/cart")}>Open cart</Button>}
+        breadcrumb={<><span>Procurement</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">Catalog</span></>}
+        title="Product catalog"
+        description="Find the supplies you need, compare availability, and build your next order."
+        actions={<Button variant="outline" onClick={() => navigate("/customer/cart")} icon={<Icon name="shopping_cart" size={18} />}>Cart ({count})</Button>}
       />
-      <Card className="p-space-base flex flex-col lg:flex-row gap-space-sm">
-        <ToolbarSearch value={search} onChange={setSearch} placeholder="Search catalog" />
-        <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="">All categories</option>
-          {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </Select>
-        <Select value={supplier} onChange={(e) => setSupplier(e.target.value)}>
-          <option value="">All suppliers</option>
-          {suppliers.map((item) => <option key={item.id} value={item.id}>{item.companyName}</option>)}
-        </Select>
-        <Button onClick={load}>Apply</Button>
+      <Card className="p-space-base">
+        <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col lg:flex-row gap-space-sm lg:items-end" aria-label="Filter product catalog">
+          <ToolbarSearch value={search} onChange={setSearch} placeholder="Search products or SKU" />
+          <Select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}>
+            <option value="">All categories</option>
+            {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </Select>
+          <Select aria-label="Filter by supplier" value={supplier} onChange={(event) => setSupplier(event.target.value)}>
+            <option value="">All suppliers</option>
+            {suppliers.map((item) => <option key={item.id} value={item.id}>{item.companyName}</option>)}
+          </Select>
+          <Button type="submit" disabled={loading}>Apply filters</Button>
+          <Button variant="ghost" onClick={clearFilters} disabled={loading}>Reset</Button>
+        </form>
       </Card>
-      {notice ? <p className="font-caption text-secondary">{notice}</p> : null}
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
-      {loading ? <PageSkeleton /> : products.length === 0 ? (
-        <Card><EmptyState icon="storefront" title="No products found" description="Try a different search or category." /></Card>
+      <p className="font-caption text-secondary" role="status" aria-live="polite">{notice}</p>
+      {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
+      {loading ? <PageSkeleton /> : !error && (products.length === 0 ? (
+        <Card><EmptyState icon="storefront" title="No products found" description="Try a different search or clear your filters." actionLabel="Clear filters" onAction={clearFilters} /></Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-space-base">
-          {products.map((product) => {
-            const status = stockStatus(product);
-            return (
-              <Card key={product.id} className="p-space-lg flex flex-col gap-space-sm hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between gap-space-sm">
-                  <div>
-                    <p className="font-caption text-outline uppercase tracking-wider font-mono-data">{product.sku}</p>
-                    <h3 className="font-headline-sm text-headline-sm truncate">{product.name}</h3>
+        <>
+          <p className="font-body-sm text-on-surface-variant" role="status">{products.length} products · Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, products.length)}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-space-base">
+            {visibleProducts.map((product) => {
+              const status = stockStatus(product);
+              return (
+                <Card key={product.id} className="overflow-hidden flex flex-col hover:shadow-sm transition-shadow">
+                  <ProductImage product={product} className="h-44 w-full" />
+                  <div className="p-space-lg flex flex-col gap-space-sm flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-space-sm">
+                      <p className="font-caption text-outline font-mono-data break-all">{product.sku}</p>
+                      <StatusBadge status={status} />
+                    </div>
+                    <h2 className="font-headline-sm text-headline-sm leading-snug break-words">{product.name}</h2>
+                    <p className="font-body-sm text-on-surface-variant line-clamp-2 min-h-[42px]">{product.description || "Contact the supplier for product details."}</p>
+                    <p className="font-caption text-outline">{product.category?.name || "Uncategorized"} · {product.supplier?.companyName || "Supplier unavailable"}</p>
+                    <div className="flex items-center justify-between font-body-sm mt-auto pt-space-sm">
+                      <span className="font-headline-md tabular-nums">{formatCurrency(product.price)}</span>
+                      <span className="text-on-surface-variant">{product.quantity} available</span>
+                    </div>
+                    <div className="flex gap-space-sm pt-space-xs">
+                      <Button variant="outline" className="flex-1" aria-label={`View ${product.name}`} onClick={() => navigate(`/customer/products/${product.id}`)}>View details</Button>
+                      <Button className="flex-1" disabled={status === "OUT"} aria-label={`Add ${product.name} to cart`} onClick={() => addToCart(product)} icon={<Icon name="add_shopping_cart" size={16} />}>
+                        {status === "OUT" ? "Unavailable" : "Add to cart"}
+                      </Button>
+                    </div>
                   </div>
-                  <StatusBadge status={status} />
-                </div>
-                <p className="font-body-sm text-on-surface-variant line-clamp-2 min-h-[36px]">{product.description || "No description provided."}</p>
-                <div className="flex items-center justify-between font-body-sm">
-                  <span className="font-headline-md">{formatCurrency(product.price)}</span>
-                  <span className="text-on-surface-variant">{product.quantity} on hand</span>
-                </div>
-                <p className="font-caption text-outline">{product.category?.name || "Uncategorized"} · {product.supplier?.companyName || "—"}</p>
-                <div className="flex gap-space-sm mt-auto">
-                  <Button variant="outline" className="flex-1" onClick={() => navigate(`/customer/products/${product.id}`)}>Details</Button>
-                  <Button className="flex-1" disabled={status === "OUT"} onClick={() => addToCart(product)} icon={<Icon name="add_shopping_cart" size={16} />}>
-                    Add
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                </Card>
+              );
+            })}
+          </div>
+          {pageCount > 1 ? <nav aria-label="Catalog pagination" className="flex items-center justify-between gap-space-base">
+            <Button variant="outline" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</Button>
+            <span className="font-body-sm" aria-live="polite">Page {page} of {pageCount}</span>
+            <Button variant="outline" disabled={page === pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button>
+          </nav> : null}
+        </>
+      ))}
     </>
   );
 }

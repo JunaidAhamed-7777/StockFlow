@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { deleteProduct, listProducts } from "../../services/product.service";
 import { getCategories, getSuppliers } from "../../services/discovery.service";
@@ -31,9 +31,11 @@ export function AdminProducts() {
   const [error, setError] = useState("");
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const requestId = useRef(0);
 
   async function load(searchOverride) {
-    const searchValue = (searchOverride ?? search).trim();
+    const activeRequest = ++requestId.current;
+    const searchValue = (typeof searchOverride === "string" ? searchOverride : search).trim();
     setLoading(true);
     setError("");
     try {
@@ -41,15 +43,16 @@ export function AdminProducts() {
       if (searchValue) params.search = searchValue;
       if (category) params.category = category;
       if (supplier) params.supplier = supplier;
-      if (lowStock) params.lowStock = true;
       const [rows, cats, sups] = await Promise.all([listProducts(params), getCategories(), getSuppliers()]);
+      if (activeRequest !== requestId.current) return;
       setCategories(cats || []);
       setSuppliers(sups || []);
-      setProducts(enrichProducts(rows || [], cats || [], sups || []));
+      const catalog = enrichProducts(rows || [], cats || [], sups || []);
+      setProducts(lowStock ? catalog.filter((item) => stockStatus(item) !== "IN") : catalog);
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (activeRequest === requestId.current) setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
@@ -57,6 +60,7 @@ export function AdminProducts() {
     const next = new URLSearchParams(location.search).get("search") || "";
     setSearch(next);
     load(next);
+    return () => { requestId.current += 1; };
   }, [location.search]);
 
   const columns = useMemo(
@@ -83,6 +87,7 @@ export function AdminProducts() {
   );
 
   async function confirmDelete() {
+    if (!pendingDelete || deleting) return;
     setDeleting(true);
     try {
       await deleteProduct(pendingDelete.id);
@@ -100,17 +105,18 @@ export function AdminProducts() {
     <>
       <PageHeader
         breadcrumb={<><span>Inventory</span><span className="text-outline-variant">/</span><span className="text-secondary font-medium">SKU Catalog</span></>}
-        title="Inventory Catalog & Stock Control"
-        description="Live product records from the catalog API."
+        title="Product catalog"
+        description="Manage products, supplier ownership, pricing, and stock availability."
         actions={<Button variant="dark" onClick={() => navigate("/admin/products/new")} icon={<Icon name="add" size={16} />}>Add Product</Button>}
       />
-      <Card className="p-space-base flex flex-col lg:flex-row gap-space-sm">
+      <Card className="p-space-base">
+      <form onSubmit={(event) => { event.preventDefault(); load(); }} className="flex flex-col lg:flex-row gap-space-sm lg:items-center" aria-label="Filter inventory catalog">
         <ToolbarSearch value={search} onChange={setSearch} placeholder="Search name, SKU, description" />
-        <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+        <Select aria-label="Filter by category" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">All categories</option>
           {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </Select>
-        <Select value={supplier} onChange={(e) => setSupplier(e.target.value)}>
+        <Select aria-label="Filter by supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)}>
           <option value="">All suppliers</option>
           {suppliers.map((item) => <option key={item.id} value={item.id}>{item.companyName}</option>)}
         </Select>
@@ -118,10 +124,11 @@ export function AdminProducts() {
           <input type="checkbox" checked={lowStock} onChange={(e) => setLowStock(e.target.checked)} className="accent-secondary" />
           Low stock
         </label>
-        <Button onClick={load}>Apply filters</Button>
+        <Button type="submit" disabled={loading}>Apply filters</Button>
+      </form>
       </Card>
       {error ? <ErrorState message={error} onRetry={load} /> : null}
-      {loading ? <PageSkeleton /> : (
+      {loading ? <PageSkeleton /> : !error && (
         <Card>
           <Table rows={products} columns={columns} empty={<EmptyState icon="inventory_2" title="No products found" description="Adjust filters or create a new SKU." actionLabel="Add Product" onAction={() => navigate("/admin/products/new")} />} />
         </Card>
@@ -134,7 +141,7 @@ export function AdminProducts() {
         danger
         loading={deleting}
         onConfirm={confirmDelete}
-        onClose={() => setPendingDelete(null)}
+        onClose={() => { if (!deleting) setPendingDelete(null); }}
       />
     </>
   );
