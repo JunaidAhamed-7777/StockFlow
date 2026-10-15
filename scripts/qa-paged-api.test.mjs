@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { createPlan, isolatedEnvironment, isolatedClientSchema, verifyGeneratedClientSource,
   verifyLocalDockerEndpoint, verifyDisposableContainer, fixtureRows, assertPage, runCaptured, recoverOwnedContainer,
-  validateSeedMessage, seedWorkerSource, createSeedWorkerClient } from './qa-paged-api.mjs';
+  validateSeedMessage, seedWorkerSource, createSeedWorkerClient, alignSeedSequences } from './qa-paged-api.mjs';
 
 const plan = createPlan('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
 const id = 'a'.repeat(64);
@@ -119,6 +119,7 @@ test('late CID and uniquely named recovery require the full random ownership pro
 test('seed worker messages expose only bounded scalar fixture createMany and disconnect operations', () => {
   assert.doesNotThrow(() => validateSeedMessage({ id: 1, action: 'createMany', model: 'product', data: fixtureRows(44).products }));
   assert.doesNotThrow(() => validateSeedMessage({ id: 2, action: 'disconnect' }));
+  assert.doesNotThrow(() => validateSeedMessage({ id: 3, action: 'alignSequences' }));
   for (const message of [
     { id: 1, action: '$executeRaw', model: 'product', data: ['DELETE'] },
     { id: 1, action: 'createMany', model: 'stockTransaction', data: [{ id: 1 }] },
@@ -127,7 +128,25 @@ test('seed worker messages expose only bounded scalar fixture createMany and dis
     { id: 1, action: 'createMany', model: 'product', data: [{ description: 'x'.repeat(8_193) }] },
     { id: 1, action: 'createMany', model: 'product', data: [{ price: Infinity }] },
     { id: 1, action: 'disconnect', data: [] },
+    { id: 1, action: 'alignSequences', table: 'User' },
+    { id: 1, action: 'alignSequences', sql: 'DELETE FROM "User"' },
+    { id: 1, action: 'alignSequences', data: ['User'] },
   ]) assert.throws(() => validateSeedMessage(message));
+});
+
+test('sequence alignment binds only six fixed table names and typed identifier fragments', async () => {
+  const queries = [];
+  const Prisma = { sql: (strings, ...values) => ({ strings: [...strings], values }) };
+  const count = await alignSeedSequences({ $executeRaw: async (query) => { queries.push(query); return 1; } }, Prisma);
+  assert.equal(count, 6);
+  assert.deepEqual(queries.map((query) => query.values[0]), ['"User"', '"Supplier"', '"Category"', '"Product"', '"Order"', '"OrderItem"']);
+  for (const query of queries) {
+    assert.equal(query.values.length, 2);
+    assert.match(query.strings.join('?'), /SELECT setval\(pg_get_serial_sequence\(\?, 'id'\)::regclass/);
+    assert.match(query.strings.join('?'), /MAX\(id\)::bigint FROM \?/);
+    assert.match(query.strings.join('?'), /\+ 1, false\)/);
+    assert.deepEqual(query.values[1], { strings: [query.values[0]], values: [] });
+  }
 });
 
 test('seed worker owns Prisma loading and returns a redacted code rather than database diagnostics', async () => {
@@ -169,10 +188,15 @@ test('parent seed proxy waits for worker process close after disconnect acknowle
   await new Promise(setImmediate);
   child.emit('message', { type: 'seed-result', id: messages[0].id, ok: true, count: 1 });
   assert.deepEqual(await inserted, { count: 1 });
+  const aligned = client.$alignSequences();
+  await new Promise(setImmediate);
+  assert.deepEqual(messages[1], { id: 2, action: 'alignSequences' });
+  child.emit('message', { type: 'seed-result', id: messages[1].id, ok: true, count: 6 });
+  assert.deepEqual(await aligned, { count: 6 });
   let finished = false;
   const disconnect = client.$disconnect().then(() => { finished = true; });
   await new Promise(setImmediate);
-  child.emit('message', { type: 'seed-result', id: messages[1].id, ok: true });
+  child.emit('message', { type: 'seed-result', id: messages[2].id, ok: true });
   await new Promise(setImmediate);
   assert.equal(finished, false);
   child.emit('close'); await disconnect;

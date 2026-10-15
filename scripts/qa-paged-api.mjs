@@ -256,7 +256,7 @@ export function validateSeedMessage(message) {
   if (!message || typeof message !== 'object' || !Number.isSafeInteger(message.id) || message.id < 1 || message.id > 1_000_000) {
     throw new Error('Invalid isolated seed message.');
   }
-  if (message.action === 'disconnect') {
+  if (message.action === 'disconnect' || message.action === 'alignSequences') {
     if (Object.keys(message).some((key) => !['id', 'action'].includes(key))) throw new Error('Invalid isolated seed message.');
     return;
   }
@@ -272,9 +272,25 @@ export function validateSeedMessage(message) {
   }
 }
 
+export async function alignSeedSequences(prisma, Prisma) {
+  // Every identifier is a static typed SQL fragment. The IPC caller cannot
+  // supply a table name, identifier, expression, or arbitrary SQL operation.
+  const tables = [
+    ['"User"', Prisma.sql`"User"`], ['"Supplier"', Prisma.sql`"Supplier"`],
+    ['"Category"', Prisma.sql`"Category"`], ['"Product"', Prisma.sql`"Product"`],
+    ['"Order"', Prisma.sql`"Order"`], ['"OrderItem"', Prisma.sql`"OrderItem"`],
+  ];
+  for (const [name, identifier] of tables) {
+    await prisma.$executeRaw(Prisma.sql`SELECT setval(pg_get_serial_sequence(${name}, 'id')::regclass,
+      COALESCE((SELECT MAX(id)::bigint FROM ${identifier}), 0) + 1, false)`);
+  }
+  return tables.length;
+}
+
 export function seedWorkerSource(clientEntry) {
-  return `const { PrismaClient } = require(${JSON.stringify(clientEntry)});\n`
+  return `const { PrismaClient, Prisma } = require(${JSON.stringify(clientEntry)});\n`
     + `const SEED_COLUMNS = ${JSON.stringify(SEED_COLUMNS)};\nconst validateSeedMessage = ${validateSeedMessage.toString()};\n`
+    + `const alignSeedSequences = ${alignSeedSequences.toString()};\n`
     + `const prisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });\n`
     + `let busy = false; let closing = false;\n`
     + `process.on('message', async (message) => {\n`
@@ -282,6 +298,8 @@ export function seedWorkerSource(clientEntry) {
     + `  try {\n    validateSeedMessage(message);\n    if (busy || closing) throw new Error('busy');\n    busy = true;\n`
     + `    if (message.action === 'disconnect') {\n      closing = true;\n      await prisma.$disconnect();\n`
     + `      process.send?.({ type: 'seed-result', id, ok: true }, () => process.exit(0));\n      return;\n    }\n`
+    + `    if (message.action === 'alignSequences') {\n      const count = await alignSeedSequences(prisma, Prisma);\n`
+    + `      process.send?.({ type: 'seed-result', id, ok: true, count });\n      return;\n    }\n`
     + `    const result = await prisma[message.model].createMany({ data: message.data });\n`
     + `    process.send?.({ type: 'seed-result', id, ok: true, count: result.count });\n`
     + `  } catch (error) {\n    const code = /^P\\d{4}$/.test(error?.code || '') ? error.code : 'SEED_OPERATION_FAILED';\n`
@@ -324,12 +342,13 @@ export function createSeedWorkerClient(child, { timeout = 30_000 } = {}) {
     validateSeedMessage(message);
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => child.kill(), timeout);
-      pending = { id: message.id, resolve, reject, timer, count: message.data?.length, disconnect: payload.action === 'disconnect' };
+      pending = { id: message.id, resolve, reject, timer, count: payload.action === 'alignSequences' ? 6 : message.data?.length, disconnect: payload.action === 'disconnect' };
       child.send(message, (error) => { if (error) child.kill(); });
     });
   }
   return { ready: initialized,
     ...Object.fromEntries(Object.keys(SEED_COLUMNS).map((model) => [model, { createMany: ({ data }) => request({ action: 'createMany', model, data }) }])),
+    $alignSequences: () => request({ action: 'alignSequences' }),
     async $disconnect() {
       if (!closed) {
         try { await request({ action: 'disconnect' }); }
@@ -632,6 +651,8 @@ export async function runIsolated({ evidencePath, onReady } = {}) {
       assert.ok(report.stages.every((stage) => stage[kind].responseBytes < 30_000), `${kind} page exceeded compact response budget`);
       assert.ok(report.stages[2][kind].responseBytes < report.stages[0][kind].responseBytes * 1.5, `${kind} page grew with total history`);
     }
+    await prisma.$alignSequences();
+    report.checks.push('synthetic fixture sequences aligned for browser-created records');
     if (onReady) await onReady({ base: api.base.url, signal: cancellation.signal,
       accounts: users.map(({ email, role }) => ({ email, role, password: loginPassword })), report });
   } catch (error) { failure = error; }
